@@ -1,0 +1,25 @@
+{
+  "name": "antigravity-account-manager",
+  "displayName": "Antigravity Account Manager",
+  "description": "Local multi-account quota dashboard and experimental session switching for Antigravity IDE.",
+  "version": "0.2.1",
+  "publisher": "local-tools",
+  "private": true,
+  "engines": { "vscode": "^1.107.0", "node": ">=20" },
+  "main": "./src/extension.cjs",
+  "activationEvents": ["onCommand:agm.open", "onView:agm.accounts"],
+  "contributes": {
+    "commands": [
+      { "command": "agm.open", "title": "Antigravity Accounts: Open Sidebar" },
+      { "command": "agm.refresh", "title": "Refresh Accounts", "icon": "$(refresh)" },
+      { "command": "agm.connect", "title": "Connect Google Account", "icon": "$(add)" }
+    ],
+    "viewsContainers": { "activitybar": [{ "id": "agm", "title": "Antigravity Accounts", "icon": "media/accounts.svg" }] },
+    "views": { "agm": [{ "type": "webview", "id": "agm.accounts", "name": "Accounts", "contextualTitle": "Antigravity Accounts" }] },
+    "menus": { "view/title": [
+      { "command": "agm.refresh", "when": "view == agm.accounts", "group": "navigation@1" },
+      { "command": "agm.connect", "when": "view == agm.accounts", "group": "navigation@2" }
+    ] }
+  },
+  "scripts": { "test": "node --test test/core.test.cjs", "check": "node --check src/extension.cjs && node --check src/core.cjs && node --check src/oauth.cjs && node --check media/panel.js" }
+}
