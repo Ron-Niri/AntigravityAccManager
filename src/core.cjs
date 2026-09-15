@@ -79,6 +79,11 @@ function availability(model, now = Date.now()) {
 }
 
 async function quotas(token, config) {
+  const { catalog, info } = await accountData(token, config);
+  return { models: normalizeModels(catalog), tier: info.paidTier?.name || info.currentTier?.name || info.paidTier?.id || info.currentTier?.id || 'Unknown plan' };
+}
+
+async function accountData(token, config, includeSettings = false) {
   if (token.isGcpTos) throw new Error('The prototype currently supports personal Google accounts only.');
   const post = (method, body) => jsonRequest(`https://cloudcode-pa.googleapis.com/v1internal:${method}`, {
     method: 'POST', headers: { Authorization: `Bearer ${token.accessToken}`, 'Content-Type': 'application/json',
@@ -87,8 +92,9 @@ async function quotas(token, config) {
   const info = await post('loadCodeAssist', { metadata: { ideName: 'antigravity', ideType: 'ANTIGRAVITY', ideVersion: config.version } });
   const project = typeof info.cloudaicompanionProject === 'string' ? info.cloudaicompanionProject : info.cloudaicompanionProject?.id;
   if (!project) throw new Error('No Antigravity project found. Complete onboarding in the IDE for this account first.');
-  const result = await post('fetchAvailableModels', { project });
-  return { models: normalizeModels(result), tier: info.paidTier?.name || info.currentTier?.name || info.paidTier?.id || info.currentTier?.id || 'Unknown plan' };
+  const catalog = await post('fetchAvailableModels', { project });
+  const settings = includeSettings ? (await post('fetchUserInfo', { project })).userSettings || {} : {};
+  return { catalog, info, settings };
 }
 
-module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, normalizeModels, availability };
+module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, accountData, normalizeModels, availability };

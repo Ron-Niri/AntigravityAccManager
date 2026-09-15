@@ -4,12 +4,19 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const core = require('./core.cjs');
 const { signIn } = require('./oauth.cjs');
+const { loadCodec } = require('./ide-state.cjs');
+const switching = require('./switch.cjs');
+const { QuotaMonitor } = require('./monitor.cjs');
 const ACCOUNT_KEY = 'agm.accounts.v1';
 const ROLLBACK_KEY = 'agm.rollback.v1';
 
 function activate(context) {
   let panel, busy = false, notice = '', accounts = [], activeId = null;
   let config;
+  let monitorConfig = { enabled: false, modelId: '', revision: 0, ...context.globalState.get('agm.monitor.v1', {}) };
+  let monitorStatus = monitorConfig.enabled ? 'Waiting for the first quota check…' : 'Select a model to enable monitoring.';
+  let codec;
+  const getCodec = () => codec ||= loadCodec(vscode.env.appRoot);
   const api = vscode.antigravityUnifiedStateSync;
   const ready = (async () => {
     const saved = await context.secrets.get(ACCOUNT_KEY);
@@ -18,9 +25,17 @@ function activate(context) {
   })();
   ready.catch(() => {});
   const save = () => context.secrets.store(ACCOUNT_KEY, JSON.stringify(accounts));
+  async function activeAccount() {
+    const token = await api?.OAuthPreferences?.getOAuthTokenInfo();
+    return accounts.find(a => a.token.refreshToken && a.token.refreshToken === token?.refreshToken);
+  }
   async function render() {
     if (!panel) return;
-    await panel.webview.postMessage({ type: 'state', busy, notice, activeId, supported: !!api?.OAuthPreferences,
+    try {
+      const token = await api?.OAuthPreferences?.getOAuthTokenInfo();
+      activeId = accounts.find(a => a.token.refreshToken && a.token.refreshToken === token?.refreshToken)?.id || null;
+    } catch { activeId = null; }
+    await panel.webview.postMessage({ type: 'state', busy, notice, activeId, monitor: { ...monitorConfig, status: monitorStatus }, supported: !!api?.OAuthPreferences,
       accounts: accounts.map(a => ({ id: a.id, email: a.email, name: a.name, tier: a.tier, checkedAt: a.checkedAt,
         error: a.error, models: (a.models || []).map(m => ({ ...m, status: core.availability(m) })) })) });
   }
@@ -45,37 +60,35 @@ function activate(context) {
     await check(a);
     return a;
   }
-  async function switchAccount(a) {
+  async function switchAccount(a, confirmed = false) {
     if (!api?.OAuthPreferences?.setOAuthTokenInfo) throw new Error('This IDE does not expose the session switching interface.');
     // Explicit click only: the prototype never automatically interrupts an agent turn.
-    const choice = await vscode.window.showWarningMessage(
+    const choice = confirmed ? 'Switch account' : await vscode.window.showWarningMessage(
       `Switch the IDE to ${a.email}? Finish or stop running agent tasks first. This experimental switch restarts the language server.`,
       { modal: true }, 'Switch account');
     if (choice !== 'Switch account') return;
-    a.token = await core.refreshToken(a.token, config);
-    const identity = await core.profile(a.token);
-    if (identity.id !== a.id) throw new Error('Account identity did not match. Switch cancelled.');
+    const target = await switching.prepare(a.token, config, getCodec(), a.id);
+    a.token = target.token;
     await save();
-    const previous = await api.OAuthPreferences.getOAuthTokenInfo();
-    if (!previous?.accessToken) throw new Error('Sign into the IDE first so a rollback session can be saved.');
-    await context.secrets.store(ROLLBACK_KEY, JSON.stringify(previous));
-    try {
-      await api.OAuthPreferences.setOAuthTokenInfo(a.token);
-      await api.UserStatus.clearUserStatus();
-      await vscode.commands.executeCommand('antigravity.restartLanguageServer');
-      const applied = await api.OAuthPreferences.getOAuthTokenInfo();
-      if (applied?.accessToken !== a.token.accessToken) throw new Error('IDE did not retain the selected session.');
-      activeId = null;
-      notice = 'Session updated. Verify the account in the IDE before continuing. Conversation continuity is not yet verified; Restore previous session is available.';
-    } catch (error) {
-      await api.OAuthPreferences.setOAuthTokenInfo(previous);
-      await api.UserStatus.clearUserStatus();
-      await vscode.commands.executeCommand('antigravity.restartLanguageServer');
-      throw new Error('Switch failed; the previous session was restored.');
-    }
+    await switching.switchSession({ api, commands: vscode.commands, codec: getCodec(), target,
+      saveRollback: previous => context.secrets.store(ROLLBACK_KEY, JSON.stringify(previous)) });
+    activeId = a.id;
+    notice = `Switched to ${a.email}. Account profile and IDE session verified.`;
   }
   async function action(message) {
     if (message.type === 'ready') { try { await ready; } catch (e) { notice = e.message; } await render(); return; }
+    if (message.type === 'monitor') {
+      await ready;
+      const modelId = typeof message.modelId === 'string' ? message.modelId : '';
+      if (message.enabled && !accounts.some(a => a.models.some(m => m.id === modelId))) return;
+      monitorConfig = { enabled: !!message.enabled, modelId, revision: monitorConfig.revision + 1 };
+      await context.globalState.update('agm.monitor.v1', monitorConfig);
+      monitorStatus = monitorConfig.enabled ? 'Waiting for the first quota check…' : 'Monitoring off.';
+      if (!monitorConfig.enabled && !monitor.running) monitor.releaseLease();
+      await render();
+      if (monitorConfig.enabled) void monitor.tick();
+      return;
+    }
     if (busy) return;
     busy = true; notice = ''; await render();
     try {
@@ -106,11 +119,12 @@ function activate(context) {
           if (!saved) throw new Error('No previous session has been saved.');
           const choice = await vscode.window.showWarningMessage('Restore the previous IDE account and restart its language server? Stop running agent tasks first.', { modal: true }, 'Restore');
           if (choice !== 'Restore') break;
-          const token = await core.refreshToken(JSON.parse(saved), config);
-          await api.OAuthPreferences.setOAuthTokenInfo(token);
-          await api.UserStatus.clearUserStatus();
-          await vscode.commands.executeCommand('antigravity.restartLanguageServer');
-          activeId = null; notice = 'Previous session restored. Verify the account in the IDE.'; break;
+          const previous = JSON.parse(saved);
+          // Support rollback entries written by the token-only prototype.
+          const target = await switching.prepare(previous.token || previous, config, getCodec());
+          await switching.switchSession({ api, commands: vscode.commands, codec: getCodec(), target,
+            saveRollback: current => context.secrets.store(ROLLBACK_KEY, JSON.stringify(current)) });
+          notice = `Restored ${target.identity.email}. Account profile and IDE session verified.`; break;
         }
         case 'remove':
           if (account && await vscode.window.showWarningMessage(`Remove ${account.email} from this manager?`, { modal: true }, 'Remove') === 'Remove') {
@@ -120,6 +134,23 @@ function activate(context) {
     } catch (error) { notice = error.message || 'Operation failed.'; }
     finally { busy = false; await render(); }
   }
+  const monitor = new QuotaMonitor({
+    config: () => monitorConfig, accounts: () => accounts, activeAccount,
+    isBusy: () => busy,
+    check: async a => { if (busy) throw new Error('Another account operation is running.'); busy = true; try { await check(a); } finally { busy = false; await render(); } },
+    status: text => { monitorStatus = text; void render(); },
+    ask: async (active, next, modelId) => {
+      const label = active.models.find(m => m.id === modelId)?.label || modelId;
+      const answer = await vscode.window.showWarningMessage(
+        `${label} quota is exhausted on ${active.email}. Switch to ${next.email}, which has quota left? Switching restarts the language server; stop any running agent task first.`,
+        'Switch account', 'Later (10 min)', 'Stop monitoring');
+      return answer === 'Switch account' ? 'switch' : answer === 'Stop monitoring' ? 'stop' : 'later';
+    },
+    stop: () => action({ type: 'monitor', enabled: false, modelId: monitorConfig.modelId }),
+    switchAccount: async a => { if (busy) throw new Error('Another account operation is running.'); busy = true; try { await switchAccount(a, true); } finally { busy = false; await render(); } }
+  });
+  const monitorTimer = setInterval(() => { void ready.then(() => monitor.tick()).catch(() => {}); }, 60000);
+  context.subscriptions.push({ dispose: () => { monitorConfig = { ...monitorConfig, enabled: false }; monitor.releaseLease(); clearInterval(monitorTimer); } });
   context.subscriptions.push(vscode.commands.registerCommand('agm.open', () => vscode.commands.executeCommand('agm.accounts.focus')));
   context.subscriptions.push(vscode.commands.registerCommand('agm.refresh', () => action({ type: 'refresh' })));
   context.subscriptions.push(vscode.commands.registerCommand('agm.connect', () => action({ type: 'login' })));
@@ -143,8 +174,14 @@ function activate(context) {
   if (context.extensionMode === vscode.ExtensionMode.Development) {
     const startup = setTimeout(async () => {
       try {
+        const request = path.join(context.extensionPath, '.runtime', 'switch-check.request');
+        if (fs.existsSync(request)) {
+          const mode = fs.readFileSync(request, 'utf8').trim();
+          fs.unlinkSync(request);
+          await require('../test/switch-live.cjs').run(context, vscode, mode);
+        }
         await vscode.commands.executeCommand('agm.open');
-      } catch { /* The smoke report records integration failures without secrets. */ }
+      } catch { /* Development diagnostics write their own credential-free report. */ }
     }, 1000);
     context.subscriptions.push({ dispose: () => clearTimeout(startup) });
   }

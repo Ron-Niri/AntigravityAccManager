@@ -4,6 +4,40 @@ const { normalizeModels, availability, refreshToken, quotas } = require('../src/
 const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
+const { switchSession } = require('../src/switch.cjs');
+
+function switchHarness(failRestart = false) {
+  let token = { accessToken: 'old' }, status = 'old@example.com';
+  const order = [];
+  const api = {
+    OAuthPreferences: { getOAuthTokenInfo: async () => token, setOAuthTokenInfo: async t => { token = t; order.push('token'); } },
+    UserStatus: { getUserStatus: async () => status },
+    pushUpdate: async update => { status = update.appliedUpdate.newRow.value; order.push('profile'); }
+  };
+  let failed = false;
+  const commands = { executeCommand: async command => {
+    order.push(command);
+    if (command.includes('handleAuthRefresh')) assert.equal(status, token.accessToken === 'new' ? 'new@example.com' : 'old@example.com');
+    if (failRestart && !failed && command.includes('restartLanguageServer')) { failed = true; throw new Error('restart failed'); }
+  } };
+  return { api, commands, order, codec: { decode: s => ({ email: s }) },
+    target: { token: { accessToken: 'new' }, status: 'new@example.com', identity: { email: 'new@example.com' } },
+    saveRollback: async previous => { assert.equal(previous.status, 'old@example.com'); order.push('backup'); } };
+}
+test('switch installs target profile before auth refresh and verifies the result', async () => {
+  const h = switchHarness(); await switchSession(h);
+  assert.deepEqual(h.order, ['backup', 'token', 'profile', 'antigravity.handleAuthRefresh', 'antigravity.restartLanguageServer']);
+});
+test('failed switch restores the previous token AND profile', async () => {
+  const h = switchHarness(true);
+  await assert.rejects(switchSession(h), /previous account and profile were restored/);
+  assert.equal((await h.api.OAuthPreferences.getOAuthTokenInfo()).accessToken, 'old');
+  assert.equal(await h.api.UserStatus.getUserStatus(), 'old@example.com');
+});
+test('failed backup prevents all session writes', async () => {
+  const h = switchHarness(); h.saveRollback = async () => { throw new Error('storage failed'); };
+  await assert.rejects(switchSession(h), /storage failed/); assert.deepEqual(h.order, []);
+});
 
 test('account readiness counts Gemini quota independently of exhausted Claude selection', () => {
   const account = { models: [{ id: 'claude', status: 'exhausted', fraction: 0 },

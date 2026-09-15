@@ -10,7 +10,11 @@ for (const name of ['login', 'import', 'refresh', 'restore']) el(name).onclick =
 function filter() { preferences.query = el('model').value; preferences.available = el('available').checked; preferences.selectedModel = el('selected-model').value; api.setState(preferences); render(); }
 el('model').oninput = filter;
 el('available').onchange = filter;
-el('selected-model').onchange = filter;
+el('selected-model').onchange = () => {
+  filter();
+  if (state.monitor?.enabled) api.postMessage({ type: 'monitor', enabled: !!el('selected-model').value, modelId: el('selected-model').value });
+};
+el('monitor-enabled').onchange = () => api.postMessage({ type: 'monitor', enabled: el('monitor-enabled').checked, modelId: el('selected-model').value });
 function node(tag, text, className) {
   const e = document.createElement(tag);
   if (text !== undefined) e.textContent = text;
@@ -48,6 +52,10 @@ function render() {
   }
   select.value = catalog.has(preferences.selectedModel) ? preferences.selectedModel : '';
   const selected = select.value;
+  el('monitor-enabled').checked = !!state.monitor?.enabled;
+  el('monitor-enabled').disabled = !selected && !state.monitor?.enabled;
+  const monitoredLabel = catalog.get(state.monitor?.modelId) || state.monitor?.modelId;
+  el('monitor-status').textContent = state.monitor?.enabled ? `${monitoredLabel} · ${state.monitor.status}` : (selected ? 'Checks every 60s. You approve each switch.' : 'Select a model to enable monitoring.');
   const matches = state.accounts.filter(a => !a.error && a.models.some(m => m.id === selected && m.status === 'available'));
   const result = el('model-result'); result.hidden = !selected; result.replaceChildren();
   if (selected) {
@@ -74,6 +82,7 @@ function render() {
     const identity = node('div', undefined, 'identity'), email = node('div', a.email, 'email'); email.title = a.email;
     const meta = node('div', undefined, 'meta');
     meta.append(node('span', a.tier || 'Plan unknown'));
+    if (state.activeId === a.id) meta.append(node('span', 'Active', 'badge'));
     if (a.checkedAt) { const checked = node('span', `· ${new Date(a.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`); checked.title = `Last checked ${new Date(a.checkedAt).toLocaleString()}`; meta.append(checked); }
     identity.append(email, meta);
     const summary = AccountReadiness.summarize(a);
@@ -82,7 +91,9 @@ function render() {
     heading.append(chevron(), node('span', (a.name || a.email).slice(0, 2).toUpperCase(), 'avatar'), identity, badge);
     card.append(heading);
     const actions = node('div', undefined, 'account-actions'), remove = button('Remove', 'remove', a.id); remove.className = 'remove';
-    actions.append(button('Switch account', 'switch', a.id), button('Refresh', 'refresh', a.id), remove); card.append(actions);
+    const switchButton = button(state.activeId === a.id ? 'Active account' : 'Switch account', 'switch', a.id);
+    switchButton.disabled = state.busy || state.activeId === a.id;
+    actions.append(switchButton, button('Refresh', 'refresh', a.id), remove); card.append(actions);
     if (a.error) card.append(node('p', a.error, 'error'));
     if (models.length) {
       const list = node('div', undefined, 'models');
@@ -107,5 +118,11 @@ function render() {
   }
   el('no-results').hidden = !state.accounts.length || visible > 0;
 }
-window.addEventListener('message', ({ data }) => { if (data.type === 'state') { state = data; render(); } });
+let receivedInitialState = false;
+window.addEventListener('message', ({ data }) => {
+  if (data.type === 'state') {
+    if (!receivedInitialState && data.monitor?.enabled) preferences.selectedModel = data.monitor.modelId;
+    receivedInitialState = true; state = data; render();
+  }
+});
 send('ready');

@@ -4,7 +4,7 @@ A local sidebar extension for the VS Code-based **Antigravity IDE**. Open the ac
 
 ## Validation status
 
-On September 14, 2026, the extension activated successfully inside the installed Antigravity IDE 2.5.5. A live read using its current session returned 14 agent models, all with quota/reset data. Both session read and write methods are exposed, but the write method has not been exercised. Nine local tests pass, including OAuth callback state/PKCE, quota schema/default handling, model filtering, refresh-token preservation and error redaction. Google browser sign-in for a second account and actual account switching remain unverified. The dashboard has not undergone screenshot-based visual QA.
+On September 15, 2026, a live test in Antigravity IDE 2.5.5 prepared a different saved account with 14 agent models, switched its OAuth token and profile, refreshed authentication, restarted the language server, verified the target session, and restored the original account. Fourteen local tests pass, including switching order, complete rollback and failed-backup protection. This verifies account switching, not transfer of an already-running server-side conversation. The dashboard has not undergone screenshot-based visual QA.
 
 ## Run
 
@@ -24,11 +24,19 @@ Quota checks are explicit, do not send generation requests, and do not accept on
 
 ## Switching
 
-Finish/stop running IDE agent work before clicking **Switch IDE**. The prototype saves the previous session to secret storage, updates the IDE OAuth state and restarts the language server. Verify the account in the IDE afterward. **Restore previous IDE session** restores the saved session. Applying the token is not proof that server-side conversations transfer between accounts. Automatic switching and transparent continuation are not implemented.
+### Quota monitor
+
+Select a model in the sidebar and enable **Ask to switch when quota runs out**. The extension checks the active saved account every 60 seconds, including while the sidebar is hidden. Confirmed zero quota triggers fresh checks of subsequent saved accounts, wrapping around the list. The first account with positive quota is offered in an IDE notification. **Switch account** approves that specific switch; **Later (10 min)** or dismissing the notification snoozes it; **Stop monitoring** disables the feature. The approved target and current account are checked again before switching. After a successful switch the same model is monitored on the new active account, so the process repeats as needed.
+
+The model and enabled setting persist across reloads. Only one IDE window owns the monitor at a time to prevent duplicate prompts; configure it in that window. Checks do not send model prompts or consume generation quota. Unknown quotas/network errors never trigger switching. If no alternative is confirmed, the sidebar explains that the next scan is in five minutes. Detection is polling-based, so it can lag usage exhaustion by a check interval plus service response time. Selecting a model here monitors its quota; it does not change the model selected in an IDE conversation.
+
+The monitor has automated tests for successive handoffs, approval/dismissal/stop, unavailable accounts, stale approvals, retry throttling and window ownership. An actual quota-exhaustion event has not been forced in live usage.
+
+Finish/stop running IDE agent work before clicking **Switch account**. The extension fetches the target account's profile, settings and model catalog before changing the session. It then saves the previous token and profile to secret storage, updates both, refreshes the IDE's authentication provider and restarts the language server. The switch succeeds only after the token and profile match the target account. A failure attempts to restore both previous values and reports if restoration cannot be verified. **Restore previous session** restores the saved account. The current account is marked **Active**. Automatic switching and transparent continuation of existing server-side conversations are not implemented.
 
 ## Storage and compatibility
 
-Account credentials and quota snapshots use VS Code `SecretStorage`. They are never posted to the webview, logged, or saved as project JSON. Removing an account removes its manager entry; it does not revoke Google consent or clear the separate rollback session. Sign-in uses an ephemeral loopback callback, random state and PKCE. The OAuth client configuration is read from the installed IDE's shipped application code; this is an unofficial integration and may stop working after updates. No client credentials are hardcoded in this repository.
+Account credentials and quota snapshots use VS Code `SecretStorage`. Credentials are never posted to the webview, logged, or saved as project JSON. Removing an account removes its manager entry; it does not revoke Google consent or clear the separate rollback session. Sign-in uses an ephemeral loopback callback, random state and PKCE. OAuth configuration and protobuf schema data are read from the installed IDE's shipped application code, without evaluating that code. Profile serialization uses the IDE's bundled protobuf library. This is an unofficial integration and may stop working after updates. No client credentials are hardcoded in this repository.
 
 Observed in Antigravity IDE 2.5.5 / VS Code base 1.107.0:
 
