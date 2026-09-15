@@ -3,13 +3,12 @@
   "displayName": "Antigravity Account Manager",
   "description": "Local multi-account quota dashboard and experimental session switching for Antigravity IDE.",
   "version": "0.5.0",
-  "publisher": "local-tools",
+  "publisher": "Ron-Niri",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
   "categories": ["Other"],
   "keywords": ["antigravity", "quota", "accounts", "model availability"],
   "extensionKind": ["ui"],
-  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/Ron-Niri/AntigravityAccManager.git"
