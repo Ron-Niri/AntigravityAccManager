@@ -10,6 +10,14 @@
   "keywords": ["antigravity", "quota", "accounts", "model availability"],
   "extensionKind": ["ui"],
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ron-Niri/AntigravityAccManager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ron-Niri/AntigravityAccManager/issues"
+  },
+  "homepage": "https://github.com/Ron-Niri/AntigravityAccManager#readme",
   "engines": {
     "vscode": "^1.107.0",
     "node": ">=20"
@@ -17,6 +25,7 @@
   "main": "./src/extension.cjs",
   "activationEvents": [
     "onCommand:agm.open",
+    "onCommand:agm.openGithub",
     "onView:agm.accounts",
     "onStartupFinished"
   ],
@@ -35,6 +44,11 @@
         "command": "agm.connect",
         "title": "Connect Google Account",
         "icon": "$(add)"
+      },
+      {
+        "command": "agm.openGithub",
+        "title": "Open GitHub Repository",
+        "icon": "$(github)"
       }
     ],
     "viewsContainers": {
@@ -67,6 +81,11 @@
           "command": "agm.connect",
           "when": "view == agm.accounts",
           "group": "navigation@2"
+        },
+        {
+          "command": "agm.openGithub",
+          "when": "view == agm.accounts",
+          "group": "navigation@3"
         }
       ]
     }

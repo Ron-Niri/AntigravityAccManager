@@ -148,6 +148,9 @@ function activate(context) {
             saveRollback: current => context.secrets.store(ROLLBACK_KEY, JSON.stringify(current)) });
           notice = `Restored ${target.identity.email}. Account profile and IDE session verified.`; break;
         }
+        case 'github':
+          void vscode.env.openExternal(vscode.Uri.parse('https://github.com/Ron-Niri/AntigravityAccManager'));
+          break;
         case 'remove':
           if (account && await vscode.window.showWarningMessage(`Remove ${account.email} from this manager?`, { modal: true }, 'Remove') === 'Remove') {
             accounts = accounts.filter(a => a.id !== account.id); await save(); notice = 'Account removed from the manager. Google authorization is unchanged.';
@@ -191,6 +194,9 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('agm.open', () => vscode.commands.executeCommand('agm.accounts.focus')));
   context.subscriptions.push(vscode.commands.registerCommand('agm.refresh', () => action({ type: 'refresh' })));
   context.subscriptions.push(vscode.commands.registerCommand('agm.connect', () => action({ type: 'login' })));
+  context.subscriptions.push(vscode.commands.registerCommand('agm.openGithub', () => {
+    void vscode.env.openExternal(vscode.Uri.parse('https://github.com/Ron-Niri/AntigravityAccManager'));
+  }));
   context.subscriptions.push(vscode.window.registerWebviewViewProvider('agm.accounts', { resolveWebviewView(view) {
     panel = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')] };
