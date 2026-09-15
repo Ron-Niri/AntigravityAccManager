@@ -1,6 +1,9 @@
 const api = acquireVsCodeApi();
 let state = { accounts: [], busy: false };
 const el = id => document.getElementById(id);
+for (const answer of ['switch', 'later', 'stop']) el(`offer-${answer}`).onclick = () => {
+  if (state.pendingOffer) api.postMessage({ type: 'monitorAnswer', id: state.pendingOffer.id, answer });
+};
 const preferences = api.getState() || { collapsed: {}, query: '', available: false };
 preferences.collapsed ||= {};
 el('model').value = preferences.query || '';
@@ -55,7 +58,9 @@ function render() {
   el('monitor-enabled').checked = !!state.monitor?.enabled;
   el('monitor-enabled').disabled = !selected && !state.monitor?.enabled;
   const monitoredLabel = catalog.get(state.monitor?.modelId) || state.monitor?.modelId;
-  el('monitor-status').textContent = state.monitor?.enabled ? `${monitoredLabel} · ${state.monitor.status}` : (selected ? 'Checks every 60s. You approve each switch.' : 'Select a model to enable monitoring.');
+  el('monitor-status').textContent = state.monitor?.enabled ? `${monitoredLabel} · ${state.monitor.status}` : (selected ? 'Checks every 20s. You approve each switch.' : 'Select a model to enable monitoring.');
+  el('switch-offer').hidden = !state.pendingOffer;
+  el('offer-text').textContent = state.pendingOffer ? `${state.pendingOffer.model} is exhausted on ${state.pendingOffer.from}. ${state.pendingOffer.to} has quota available.` : '';
   const matches = state.accounts.filter(a => !a.error && a.models.some(m => m.id === selected && m.status === 'available'));
   const result = el('model-result'); result.hidden = !selected; result.replaceChildren();
   if (selected) {

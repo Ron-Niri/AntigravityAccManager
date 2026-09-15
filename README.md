@@ -1,59 +1,99 @@
 # Antigravity Account Manager
 
-A local sidebar extension for the VS Code-based **Antigravity IDE**. Open the accounts icon in the activity bar. Connect personal Google accounts, select a model to see which accounts have fresh available quota, and inspect reset countdowns. The compact GitHub-inspired interface supports dark/light themes, collapsible accounts, provider icons and persistent filters. Session switching remains experimental.
+**Find an account with quota. Switch without another sign-in.**
 
-## Validation status
+A sidebar extension for Antigravity IDE that brings your Google accounts, model quotas, and reset times into one view.
 
-On September 15, 2026, a live test in Antigravity IDE 2.5.5 prepared a different saved account with 14 agent models, switched its OAuth token and profile, refreshed authentication, restarted the language server, verified the target session, and restored the original account. Fourteen local tests pass, including switching order, complete rollback and failed-backup protection. This verifies account switching, not transfer of an already-running server-side conversation. The dashboard has not undergone screenshot-based visual QA.
+## What it does
 
-## Run
+| Feature | Details |
+| --- | --- |
+| Account overview | Remaining quota and reset countdowns for each account’s agent models. |
+| Model availability | Select a model to see which accounts can run it now. |
+| Fast refresh | Check up to five accounts at once, with progress shown as results arrive. |
+| Account switching | Switch the IDE session and profile together. Restore the previous session when needed. |
+| Quota monitor | Detect exhaustion and offer the next account with available quota. Every switch requires your approval. |
+| Local credential storage | Credentials stay in the IDE’s encrypted secret storage. |
 
-Requires the installed Antigravity IDE and Node 20+. No npm dependencies.
+## Get started
+
+1. Install the VSIX through **Extensions: Install from VSIX** in Antigravity IDE, then reload the window.
+2. Open the **Accounts** icon in the activity bar.
+3. Choose **Use IDE account** to save your current session, or **Connect account** to sign in through Google.
+4. Add your other accounts. Select a model or use the search box to narrow the list.
+
+Use accounts you own or are authorized to access. New accounts must complete Antigravity’s onboarding in the IDE before they can be used here.
+
+## Switch accounts
+
+Choose **Switch account** on a saved account. Finish or stop running agent tasks first: switching restarts the language server. The extension verifies the resulting token and profile, marks the account **Active**, and saves the previous session for restoration.
+
+To undo a switch, expand **Session controls** and choose **Restore previous session**. Switching does not guarantee that an existing server-side conversation can continue under a different account.
+
+## Watch a model’s quota
+
+Select a model and enable **Ask to switch when quota runs out**.
+
+- The focused IDE window checks the active account every **20 seconds**, even when the sidebar is hidden.
+- When quota reaches zero, it checks other saved accounts in order, in small parallel batches.
+- A notification and a persistent sidebar offer identify the next account with confirmed quota.
+- Choose **Switch account**, **Later**, or **Stop**. Closing the notification leaves the sidebar offer available.
+- After an approved switch, the same model is monitored on the new account.
+
+The monitor rechecks both accounts before switching. Network errors and missing quota information do not count as exhaustion. **Later** pauses reminders for ten minutes; if no alternative has quota, the next search runs after five minutes. Monitoring resumes when an Antigravity window gains focus. Choosing a model here does not change the model selected in your conversation.
+
+## Reading the results
+
+| Status | Meaning |
+| --- | --- |
+| Available | The last fresh check reported positive quota. |
+| Exhausted | The service reported zero quota. |
+| Needs refresh / Stale | Cached data is over five minutes old, or the last request failed. |
+| Recheck | A reported reset time has passed; availability needs confirmation. |
+| Unknown | The service did not report usable quota information. |
+
+Hover a reset countdown to see the exact local date and time. Some models share quota buckets, so their percentages should not be added together. Service response times and polling intervals mean detection is not instantaneous.
+
+## Privacy
+
+- OAuth credentials and account snapshots use the IDE’s `SecretStorage`.
+- Credentials are not sent to the sidebar, logged, or stored in project files.
+- Requests go directly to Google’s authentication and Antigravity services; there is no intermediary service or extension telemetry.
+- Removing an account deletes its manager entry. It does not revoke Google consent or clear a separate saved rollback session.
+
+## Compatibility
+
+Requires the **VS Code-based Antigravity IDE**. Account integration has been tested with Antigravity IDE 2.5.5. This extension depends on internal account interfaces and schemas shipped with the IDE; an IDE update may require an extension update. It does not intercept TLS traffic.
+
+This is an independent project, not an official Google extension. Provider names and logos belong to their respective owners.
+
+## Build from source
+
+```sh
+npm ci
+npm run check
+npm test
+npm run package
+```
+
+The resulting VSIX is ready to install locally. See [Publishing](PUBLISHING.md) for publisher setup and registry uploads, and [Changelog](CHANGELOG.md) for release notes.
+
+To run a development window on Windows:
 
 ```powershell
-npm test
-npm run check
 & "$env:LOCALAPPDATA\Programs\Antigravity IDE\bin\antigravity-ide.cmd" --new-window --extensionDevelopmentPath="$PWD"
 ```
 
-Click the activity-bar accounts icon, or run **Antigravity Accounts: Open Sidebar**. Choose **Use IDE account**, or **Connect account** and complete Google's sign-in in your browser. Repeat for another account. The model selector lists which accounts have fresh available quota; **Available only** hides exhausted/stale readings. Hover a reset countdown for the exact local date/time. Connect only accounts you own or are authorized to use.
+## License
 
-For a normal installation, build once with `powershell -File scripts/package.ps1`, then install the generated VSIX using **Extensions: Install from VSIX**. Rebuilding requires a new output filename/version or removing the previous generated VSIX. Account storage uses the same extension identity as version 0.1.0.
+Copyright 2026 Antigravity Account Manager contributors. Licensed under the [Apache License 2.0](LICENSE). Third-party names and trademarks belong to their respective owners.
 
-Quota checks are explicit, do not send generation requests, and do not accept onboarding terms. If an account needs onboarding, complete that in Antigravity first. Cached readings become stale after five minutes; a passed reset timestamp requires a fresh check. Models may share quota buckets, so percentages are not additive. An absent quota message means unknown; an omitted fraction inside a quota message means zero under the observed proto3 schema. The IDE's agent model catalog is used to exclude tab-completion and other auxiliary models.
+## Troubleshooting
 
-## Switching
+**The sidebar icon is missing:** run **Developer: Reload Window**, then **Antigravity Accounts: Open Sidebar** from the command palette.
 
-### Quota monitor
+**The monitor finds exhaustion but no notification appears:** open the sidebar; pending offers remain there. Make sure monitoring is enabled for the intended model and that the active account is saved. Monitoring runs in the focused IDE window.
 
-Select a model in the sidebar and enable **Ask to switch when quota runs out**. The extension checks the active saved account every 60 seconds, including while the sidebar is hidden. Confirmed zero quota triggers fresh checks of subsequent saved accounts, wrapping around the list. The first account with positive quota is offered in an IDE notification. **Switch account** approves that specific switch; **Later (10 min)** or dismissing the notification snoozes it; **Stop monitoring** disables the feature. The approved target and current account are checked again before switching. After a successful switch the same model is monitored on the new active account, so the process repeats as needed.
+**An account needs to sign in again:** reconnect it through **Connect account**. Refresh-token rotation is handled automatically when the IDE profile can identify the saved account.
 
-The model and enabled setting persist across reloads. Only one IDE window owns the monitor at a time to prevent duplicate prompts; configure it in that window. Checks do not send model prompts or consume generation quota. Unknown quotas/network errors never trigger switching. If no alternative is confirmed, the sidebar explains that the next scan is in five minutes. Detection is polling-based, so it can lag usage exhaustion by a check interval plus service response time. Selecting a model here monitors its quota; it does not change the model selected in an IDE conversation.
-
-The monitor has automated tests for successive handoffs, approval/dismissal/stop, unavailable accounts, stale approvals, retry throttling and window ownership. An actual quota-exhaustion event has not been forced in live usage.
-
-Finish/stop running IDE agent work before clicking **Switch account**. The extension fetches the target account's profile, settings and model catalog before changing the session. It then saves the previous token and profile to secret storage, updates both, refreshes the IDE's authentication provider and restarts the language server. The switch succeeds only after the token and profile match the target account. A failure attempts to restore both previous values and reports if restoration cannot be verified. **Restore previous session** restores the saved account. The current account is marked **Active**. Automatic switching and transparent continuation of existing server-side conversations are not implemented.
-
-## Storage and compatibility
-
-Account credentials and quota snapshots use VS Code `SecretStorage`. Credentials are never posted to the webview, logged, or saved as project JSON. Removing an account removes its manager entry; it does not revoke Google consent or clear the separate rollback session. Sign-in uses an ephemeral loopback callback, random state and PKCE. OAuth configuration and protobuf schema data are read from the installed IDE's shipped application code, without evaluating that code. Profile serialization uses the IDE's bundled protobuf library. This is an unofficial integration and may stop working after updates. No client credentials are hardcoded in this repository.
-
-Observed in Antigravity IDE 2.5.5 / VS Code base 1.107.0:
-
-- `antigravityUnifiedStateSync.OAuthPreferences.getOAuthTokenInfo/setOAuthTokenInfo`
-- `antigravityUnifiedStateSync.UserStatus.clearUserStatus`
-- `antigravity.restartLanguageServer`
-- `https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`
-- `https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
-
-The IDE's quota-summary UI also uses the language server's `retrieveUserQuotaSummary`. This prototype uses per-model `quotaInfo` from `fetchAvailableModels`; it does not yet collect all short/long-term bucket details from the language server.
-
-Google's public documentation: [model quotas](https://antigravity.google/docs/cli/commands/usage), [quota status fields](https://antigravity.google/docs/cli/statusline/). These documents do not promise support for this extension's internal interfaces.
-
-## Read-only IDE smoke check
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\Antigravity IDE\bin\antigravity-ide.cmd" --new-window --extensionDevelopmentPath="$PWD" --extensionTestsPath="$PWD\test\ide-smoke.cjs"
-```
-
-Writes a credential-free capability and model report to ignored `.runtime/ide-smoke.json`. It does not switch accounts or refresh tokens. The CLI test mode requires all other IDE instances to be closed. Normal sidebar opening does not run this diagnostic. Two-account login/switching must be verified interactively; unit tests do not establish live compatibility.
+**A quota check fails:** retry with **Refresh**. If onboarding is incomplete, sign in to that account in Antigravity and finish onboarding first.

@@ -5,6 +5,32 @@ const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
+const { scanAccounts } = require('../src/scan.cjs');
+
+test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
+  let running = 0, maximum = 0;
+  const visited = [];
+  await scanAccounts(Array.from({ length: 28 }, (_, id) => id), async id => {
+    maximum = Math.max(maximum, ++running);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    visited.push(id); running--;
+  });
+  assert.equal(maximum, 5);
+  assert.equal(new Set(visited).size, 28);
+});
+test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
+  const original = global.fetch, urls = [], cache = {};
+  global.fetch = async url => {
+    urls.push(url);
+    return { ok: true, json: async () => url.endsWith(':loadCodeAssist') ? { cloudaicompanionProject: 'test-project' } : { models: {} } };
+  };
+  try {
+    await quotas({ accessToken: 'test' }, { version: 'test' }, cache);
+    await quotas({ accessToken: 'test' }, { version: 'test' }, cache);
+    assert.equal(urls.filter(url => url.endsWith(':loadCodeAssist')).length, 1);
+    assert.equal(urls.filter(url => url.endsWith(':fetchAvailableModels')).length, 2);
+  } finally { global.fetch = original; }
+});
 
 function switchHarness(failRestart = false) {
   let token = { accessToken: 'old' }, status = 'old@example.com';

@@ -1,7 +1,7 @@
 const net = require('node:net');
 
-// All IDE windows share the account session. Hold one process-wide lease while
-// checking/prompting so multiple windows cannot offer competing switches.
+// Hold a lease for one check/prompt only. A background window must never retain
+// ownership and prevent the focused window from delivering notifications.
 async function acquireLease() {
   const server = net.createServer(socket => socket.destroy());
   const acquired = await new Promise(resolve => {
@@ -30,14 +30,14 @@ function nextAccounts(accounts, activeId) {
 class QuotaMonitor {
   constructor(deps) { this.d = deps; this.running = false; this.cooldowns = new Map(); this.now = deps.now || Date.now; }
   async tick() {
-    if (this.running || this.d.isBusy()) return;
+    if (this.running || this.d.isBusy() || this.d.isFocused?.() === false) return;
     const config = { ...this.d.config() };
     if (!config.enabled || !config.modelId) { this.releaseLease(); return; }
     this.running = true;
     try {
       this.release ||= await (this.d.acquireLease || acquireLease)();
-      if (!this.release) { this.d.status('Monitoring is owned by another IDE window. Configure it in that window.'); return; }
-      const stillEnabled = () => { const c = this.d.config(); return c.enabled && c.modelId === config.modelId && c.revision === config.revision; };
+      if (!this.release) { this.d.status('Another window is finishing a check. Retrying shortly.'); return; }
+      const stillEnabled = () => { const c = this.d.config(); return this.d.isFocused?.() !== false && c.enabled && c.modelId === config.modelId && c.revision === config.revision; };
       const active = await this.d.activeAccount();
       if (!active) { this.d.status('Save the active IDE account to monitor its quota.'); return; }
       const key = `${active.id}:${config.modelId}`;
@@ -45,18 +45,22 @@ class QuotaMonitor {
       this.d.status('Checking the active account…');
       await this.d.check(active);
       if (!stillEnabled()) return;
-      if (active.error) { this.d.status('Quota check failed; retrying in 60 seconds.'); return; }
+      if (active.error) { this.d.status('Quota check failed; retrying in 20 seconds.'); return; }
       if (!active.models.some(m => m.id === config.modelId)) { this.d.status('This model is not reported for the active account.'); return; }
       if (!exhausted(active, config.modelId)) {
         this.cooldowns.delete(key);
-        this.d.status(available(active, config.modelId) ? 'Watching active account · checks every 60s' : 'Quota unknown; retrying in 60 seconds.'); return;
+        this.d.status(available(active, config.modelId) ? 'Watching active account · checks every 20s' : 'Quota unknown; retrying in 20 seconds.'); return;
       }
       this.d.status('Quota exhausted. Looking for the next account…');
       let candidate;
-      for (const account of nextAccounts(this.d.accounts(), active.id)) {
+      const alternatives = nextAccounts(this.d.accounts(), active.id);
+      for (let offset = 0; offset < alternatives.length; offset += 5) {
         if (!stillEnabled() || this.d.isBusy()) return;
-        await this.d.check(account);
-        if (available(account, config.modelId)) { candidate = account; break; }
+        const batch = alternatives.slice(offset, offset + 5);
+        if (this.d.checkMany) await this.d.checkMany(batch);
+        else for (const account of batch) await this.d.check(account);
+        candidate = batch.find(account => available(account, config.modelId));
+        if (candidate) break;
       }
       if (!stillEnabled()) return;
       if (!candidate) {
@@ -83,10 +87,10 @@ class QuotaMonitor {
         this.d.status('Quota changed while waiting. Rechecking on the next cycle.'); return;
       }
       await this.d.switchAccount(candidate);
-      this.d.status('Switched. Watching the new active account · checks every 60s');
+      this.d.status('Switched. Watching the new active account · checks every 20s');
     } catch {
-      this.d.status('Monitor could not complete this check. Retrying in 60 seconds.');
-    } finally { if (!this.d.config().enabled) this.releaseLease(); this.running = false; }
+      this.d.status('Monitor could not complete this check. Retrying in 20 seconds.');
+    } finally { this.releaseLease(); this.running = false; }
   }
   releaseLease() { const release = this.release; this.release = null; release?.(); }
 }

@@ -61,11 +61,23 @@ test('no candidate triggers a bounded retry, not repeated prompts or scans', asy
   await h.monitor.tick(); const checks = h.checks.length;
   await h.monitor.tick(); assert.equal(h.checks.length, checks); assert.equal(h.prompts.length, 0);
 });
-test('lease stays held across polls to prevent other windows prompting sequentially', async () => {
+test('lease is released after each poll so a hidden window cannot monopolize the monitor', async () => {
   const h = harness(); let acquired = 0, released = 0;
   h.d.acquireLease = async () => { acquired++; return () => released++; };
   h.accounts[0].models[0].fraction = 1;
   await h.monitor.tick(); await h.monitor.tick();
-  assert.equal(acquired, 1); assert.equal(released, 0);
-  h.config.enabled = false; await h.monitor.tick(); assert.equal(released, 1);
+  assert.equal(acquired, 2); assert.equal(released, 2);
+  h.config.enabled = false; await h.monitor.tick(); assert.equal(released, 2);
+});
+test('background windows do not check or prompt; focused window can resume', async () => {
+  const h = harness(); let focused = false;
+  h.d.isFocused = () => focused;
+  await h.monitor.tick(); assert.equal(h.checks.length, 0);
+  focused = true; await h.monitor.tick(); assert.equal(h.prompts.length, 1);
+});
+test('losing focus while approval is pending cancels the switch', async () => {
+  const h = harness(); let focused = true;
+  h.d.isFocused = () => focused;
+  h.d.ask = async () => { focused = false; return 'switch'; };
+  await h.monitor.tick(); assert.equal(h.switches.length, 0);
 });

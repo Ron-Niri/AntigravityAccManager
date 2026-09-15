@@ -78,21 +78,28 @@ function availability(model, now = Date.now()) {
   return model.status;
 }
 
-async function quotas(token, config) {
-  const { catalog, info } = await accountData(token, config);
+async function quotas(token, config, cache) {
+  const { catalog, info } = await accountData(token, config, false, cache);
   return { models: normalizeModels(catalog), tier: info.paidTier?.name || info.currentTier?.name || info.paidTier?.id || info.currentTier?.id || 'Unknown plan' };
 }
 
-async function accountData(token, config, includeSettings = false) {
-  if (token.isGcpTos) throw new Error('The prototype currently supports personal Google accounts only.');
+async function accountData(token, config, includeSettings = false, cache) {
+  if (token.isGcpTos) throw new Error('Only personal Google accounts are supported.');
   const post = (method, body) => jsonRequest(`https://cloudcode-pa.googleapis.com/v1internal:${method}`, {
     method: 'POST', headers: { Authorization: `Bearer ${token.accessToken}`, 'Content-Type': 'application/json',
       'User-Agent': `antigravity/${config.version} windows/x64` }, body: JSON.stringify(body)
   });
-  const info = await post('loadCodeAssist', { metadata: { ideName: 'antigravity', ideType: 'ANTIGRAVITY', ideVersion: config.version } });
-  const project = typeof info.cloudaicompanionProject === 'string' ? info.cloudaicompanionProject : info.cloudaicompanionProject?.id;
+  const cached = cache?.project && Date.now() - cache.updatedAt < 15 * 60000;
+  const info = cached ? cache.info : await post('loadCodeAssist', { metadata: { ideName: 'antigravity', ideType: 'ANTIGRAVITY', ideVersion: config.version } });
+  const project = cached ? cache.project : typeof info.cloudaicompanionProject === 'string' ? info.cloudaicompanionProject : info.cloudaicompanionProject?.id;
   if (!project) throw new Error('No Antigravity project found. Complete onboarding in the IDE for this account first.');
-  const catalog = await post('fetchAvailableModels', { project });
+  let catalog;
+  try { catalog = await post('fetchAvailableModels', { project }); }
+  catch (error) {
+    if (cached && [403, 404].includes(error.status)) { cache.updatedAt = 0; return accountData(token, config, includeSettings, cache); }
+    throw error;
+  }
+  if (cache && !cached) Object.assign(cache, { project, info, updatedAt: Date.now() });
   const settings = includeSettings ? (await post('fetchUserInfo', { project })).userSettings || {} : {};
   return { catalog, info, settings };
 }
