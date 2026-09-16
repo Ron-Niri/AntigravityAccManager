@@ -60,6 +60,8 @@ The monitor rechecks both accounts before switching. Network errors and missing 
 
 Hover a reset countdown to see the exact local date and time. Some models share quota buckets, so their percentages should not be added together. Service response times and polling intervals mean detection is not instantaneous.
 
+Selecting a model shows only accounts with fresh quota for that model. The matching-account summary stays collapsed until you choose **Show accounts**.
+
 ## Privacy
 
 - OAuth credentials and account snapshots use the IDE’s `SecretStorage`.

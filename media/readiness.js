@@ -13,7 +13,10 @@
       + (cachedAvailable ? ` ${cachedAvailable} had quota at the last check.` : '');
     return { ready, uncertain, cachedAvailable, label, detail };
   }
-  const api = { modelState, summarize };
+  function visibleForSelection(account, model, selectedModel) {
+    return !selectedModel || model.id === selectedModel && modelState(account, model) === 'available';
+  }
+  const api = { modelState, summarize, visibleForSelection };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AccountReadiness = api;
 })(globalThis);

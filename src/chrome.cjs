@@ -62,4 +62,28 @@ function openProfile(executable, directory, url, launch = spawn) {
   return true;
 }
 
-module.exports = { chromePaths, profilesFromState, readProfiles, profileAccounts, uniqueAccounts, discover, openProfile };
+function closeWindow(title, launch = spawn) {
+  if (!/^Antigravity OAuth [a-f0-9]{16}$/.test(title)) return false;
+  const escaped = title.replaceAll("'", "''");
+  const script = `$code=@'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class AgmWindowCloser {
+  public delegate bool Callback(IntPtr handle, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Callback callback, IntPtr data);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr handle, StringBuilder text, int count);
+  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
+  public static bool Close(string title) { bool found = false; EnumWindows((handle, data) => { var text = new StringBuilder(256); GetWindowText(handle, text, text.Capacity); if (text.ToString().Contains(title)) { PostMessage(handle, 0x0010, IntPtr.Zero, IntPtr.Zero); found = true; } return true; }, IntPtr.Zero); return found; }
+}
+'@; Add-Type -TypeDefinition $code; for($i=0;$i -lt 30;$i++){ if([AgmWindowCloser]::Close('${escaped}')){ exit 0 }; Start-Sleep -Milliseconds 100 }; exit 1`;
+  const child = launch('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], {
+    detached: false, stdio: 'ignore', windowsHide: true
+  });
+  return new Promise(resolve => {
+    child.once('error', () => resolve(false));
+    child.once('exit', code => resolve(code === 0));
+  });
+}
+
+module.exports = { chromePaths, profilesFromState, readProfiles, profileAccounts, uniqueAccounts, discover, openProfile, closeWindow };

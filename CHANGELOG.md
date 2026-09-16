@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5
+
+- Close each completed Chrome login window through a uniquely targeted Windows message.
+- Style the OAuth completion page and fix its manual close control under the page security policy.
+- Collapse the selected-model account list and hide exhausted accounts while a model is selected.
+
 ## 0.5.4
 
 - Open Chrome imports in dedicated app windows and close each window automatically after its OAuth callback succeeds or is cancelled.

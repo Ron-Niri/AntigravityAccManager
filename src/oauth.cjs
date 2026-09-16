@@ -12,25 +12,29 @@ async function signIn(config, openExternal, cancellation, options = {}) {
   function callbackPage(message) {
     if (!options.closeWindow) return message;
     const nonce = randomBytes(18).toString('base64');
-    return { nonce, html: `<!doctype html><meta charset="utf-8"><title>Antigravity Accounts</title><p>${message}</p><button onclick="window.close()">Close window</button><script nonce="${nonce}">setTimeout(()=>window.close(),100);</script>` };
+    const windowTitle = `Antigravity OAuth ${randomBytes(8).toString('hex')}`;
+    return { nonce, windowTitle, html: `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${windowTitle}</title><style nonce="${nonce}">:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;font:14px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(420px,calc(100% - 32px));padding:28px;border:1px solid #30363d;border-radius:12px;background:#161b22;box-shadow:0 18px 48px #0008}.mark{width:42px;height:42px;display:grid;place-items:center;margin-bottom:18px;border:1px solid #2ea043;border-radius:50%;background:#12261a;color:#3fb950;font-size:22px}h1{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}p{margin:0;color:#8b949e}.status{margin-top:18px;padding-top:16px;border-top:1px solid #30363d;font-size:12px}button{width:100%;margin-top:18px;padding:9px 12px;border:1px solid #2ea043;border-radius:7px;background:#238636;color:white;font:600 13px inherit;cursor:pointer}button:hover{background:#2ea043}button:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}</style></head><body><main class="shell"><div class="mark" aria-hidden="true">✓</div><h1>Account connected</h1><p>${message}</p><p class="status">Returning to Antigravity Account Manager…</p><button id="close" type="button">Close this window</button></main><script nonce="${nonce}">document.getElementById('close').addEventListener('click',()=>window.close());setTimeout(()=>window.close(),150);</script></body></html>` };
   }
   function respond(res, message) {
     const page = callbackPage(message);
     res.setHeader('Cache-Control', 'no-store');
-    if (typeof page === 'string') { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end(page); return; }
+    if (typeof page === 'string') { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end(page); return null; }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${page.nonce}'; style-src 'none'`);
+    res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${page.nonce}'; style-src 'nonce-${page.nonce}'`);
     res.end(page.html);
+    return options.onCloseWindow?.(page.windowTitle);
   }
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method !== 'GET' || url.pathname !== '/oauth-callback') { res.writeHead(404).end(); return; }
     if (url.searchParams.get('state') !== state) { res.writeHead(400).end('Invalid sign-in state.'); return; }
-    if (url.searchParams.has('error')) { respond(res, 'Sign-in was cancelled.'); fail(new Error('Google sign-in was cancelled.')); return; }
+    if (url.searchParams.has('error')) {
+      Promise.resolve(respond(res, 'Sign-in was cancelled.')).catch(() => {}).finally(() => fail(new Error('Google sign-in was cancelled.'))); return;
+    }
     const code = url.searchParams.get('code');
     if (!code) { res.writeHead(400).end('Missing authorization code.'); return; }
-    respond(res, options.closeWindow ? 'Sign-in received. This window will close automatically.' : 'Sign-in received. Return to Antigravity Accounts. You can close this tab.');
-    complete(code);
+    Promise.resolve(respond(res, options.closeWindow ? 'Sign-in received. This window will close automatically.' : 'Sign-in received. Return to Antigravity Accounts. You can close this tab.'))
+      .catch(() => {}).finally(() => complete(code));
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const redirect = `http://localhost:${server.address().port}/oauth-callback`;

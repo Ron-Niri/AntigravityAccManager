@@ -66,8 +66,17 @@ function render() {
   const matches = state.accounts.filter(a => !a.error && a.models.some(m => m.id === selected && m.status === 'available'));
   const result = el('model-result'); result.hidden = !selected; result.replaceChildren();
   if (selected) {
-    result.append(node('strong', `${matches.length} account${matches.length === 1 ? '' : 's'} ready`, matches.length ? 'ready-label' : ''));
-    result.append(node('span', matches.length ? matches.map(a => a.email).join(', ') : 'No fresh available quota. Refresh accounts to check again.'));
+    const readyAccounts = node('details', undefined, 'ready-accounts');
+    const readySummary = node('summary');
+    readySummary.append(node('strong', `${matches.length} account${matches.length === 1 ? '' : 's'} ready`, matches.length ? 'ready-label' : ''));
+    readySummary.append(node('span', matches.length ? 'Show accounts' : 'Refresh to check again', 'ready-toggle'));
+    readyAccounts.append(readySummary);
+    if (matches.length) {
+      const readyList = node('div', undefined, 'ready-list');
+      for (const account of matches) readyList.append(node('span', account.email));
+      readyAccounts.append(readyList);
+    } else readyAccounts.append(node('p', 'No fresh available quota.', 'ready-empty'));
+    result.append(readyAccounts);
   }
   el('notice').textContent = state.notice || ''; el('notice').hidden = !state.notice;
   el('count').textContent = state.accounts.length;
@@ -79,7 +88,7 @@ function render() {
   let visible = 0;
   for (const a of state.accounts) {
     const accountMatch = `${a.email} ${a.name}`.toLowerCase().includes(query);
-    const models = a.models.filter(m => (!selected || m.id === selected) && (accountMatch || `${m.label} ${m.id}`.toLowerCase().includes(query)) && (!el('available').checked || (!a.error && m.status === 'available')));
+    const models = a.models.filter(m => AccountReadiness.visibleForSelection(a, m, selected) && (accountMatch || `${m.label} ${m.id}`.toLowerCase().includes(query)) && (!el('available').checked || AccountReadiness.modelState(a, m) === 'available'));
     if (selected && !models.length) continue;
     if (!models.length && (query || el('available').checked) && !(accountMatch && !el('available').checked)) continue;
     visible++;

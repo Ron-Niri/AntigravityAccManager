@@ -3,11 +3,12 @@ const assert = require('node:assert/strict');
 const { normalizeModels, availability, refreshToken, quotas } = require('../src/core.cjs');
 const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
-const { summarize } = require('../media/readiness.js');
+const { summarize, visibleForSelection } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
-const { profilesFromState, profileAccounts, uniqueAccounts, openProfile } = require('../src/chrome.cjs');
+const { profilesFromState, profileAccounts, uniqueAccounts, openProfile, closeWindow } = require('../src/chrome.cjs');
 const fs = require('node:fs');
+const { EventEmitter } = require('node:events');
 
 test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
   let running = 0, maximum = 0;
@@ -30,6 +31,13 @@ test('packaged sidebar defines its message bridge before binding buttons', () =>
 test('account cards are collapsed by default and only open from saved state or search', () => {
   const panel = fs.readFileSync(require.resolve('../media/panel.js'), 'utf8');
   assert.match(panel, /card\.open = query \? true : preferences\.collapsed\[a\.id\] === false/);
+});
+test('selected model filtering hides exhausted and failed accounts', () => {
+  const selected = 'gemini-test';
+  assert.equal(visibleForSelection({ error: null }, { id: selected, status: 'available' }, selected), true);
+  assert.equal(visibleForSelection({ error: null }, { id: selected, status: 'exhausted' }, selected), false);
+  assert.equal(visibleForSelection({ error: 'offline' }, { id: selected, status: 'available' }, selected), false);
+  assert.equal(visibleForSelection({ error: null }, { id: 'other', status: 'available' }, selected), false);
 });
 test('Chrome profile discovery uses public profile metadata only', () => {
   assert.deepEqual(profilesFromState({ profile: { info_cache: {
@@ -68,6 +76,19 @@ test('Chrome OAuth opens in a dedicated app window that the callback can close',
   assert.equal(openProfile('chrome.exe', 'Profile 1', 'https://example.com/oauth', (...args) => { invocation = args; return child; }), true);
   assert.deepEqual(invocation[1], ['--profile-directory=Profile 1', '--app=https://example.com/oauth']);
   assert.equal(invocation[2].detached, true);
+});
+test('completed Chrome OAuth closes only its unique callback window', async () => {
+  let invocation;
+  const closed = await closeWindow('Antigravity OAuth 0123456789abcdef', (...args) => {
+    invocation = args;
+    const child = new EventEmitter();
+    queueMicrotask(() => child.emit('exit', 0));
+    return child;
+  });
+  assert.equal(closed, true);
+  assert.equal(invocation[0], 'powershell.exe');
+  assert.match(invocation[1].at(-1), /0123456789abcdef/);
+  assert.equal(await closeWindow('Google Chrome', () => { throw new Error('must not launch'); }), false);
 });
 test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
   const original = global.fetch, urls = [], cache = {};
@@ -184,7 +205,7 @@ test('service error bodies containing credentials are never surfaced', async () 
 });
 test('OAuth rejects wrong state and exchanges a valid callback using matching PKCE', async () => {
   const original = global.fetch;
-  let challenge, redirect;
+  let challenge, redirect, closeTitle;
   global.fetch = async (url, options) => {
     if (String(url).startsWith('http://localhost:')) return original(url, options);
     assert.equal(String(url), 'https://oauth2.googleapis.com/token');
@@ -203,10 +224,14 @@ test('OAuth rejects wrong state and exchanges a valid callback using matching PK
       assert.equal(rejected.status, 400);
       const accepted = await fetch(`${redirect}?state=${auth.searchParams.get('state')}&code=test-code`);
       assert.equal(accepted.status, 200);
-      assert.match(await accepted.text(), /window\.close\(\)/);
+      const completion = await accepted.text();
+      assert.match(completion, /addEventListener\('click'/);
+      assert.match(completion, /class="shell"/);
       return true;
-    }, undefined, { loginHint: 'profile@example.com', selectAccount: false, closeWindow: true });
+    }, undefined, { loginHint: 'profile@example.com', selectAccount: false, closeWindow: true,
+      onCloseWindow: async title => { closeTitle = title; } });
     assert.equal(token.refreshToken, 'test-refresh');
+    assert.match(closeTitle, /^Antigravity OAuth [a-f0-9]{16}$/);
   } finally { global.fetch = original; }
 });
 test('abandoned OAuth windows time out instead of blocking an import batch', async () => {
