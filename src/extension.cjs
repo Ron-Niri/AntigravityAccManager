@@ -8,6 +8,7 @@ const { loadCodec } = require('./ide-state.cjs');
 const switching = require('./switch.cjs');
 const { QuotaMonitor } = require('./monitor.cjs');
 const { scanAccounts } = require('./scan.cjs');
+const chrome = require('./chrome.cjs');
 const ACCOUNT_KEY = 'agm.accounts.v1';
 const ROLLBACK_KEY = 'agm.rollback.v1';
 
@@ -130,6 +131,39 @@ function activate(context) {
             signIn(config, url => vscode.env.openExternal(vscode.Uri.parse(url)), cancellation));
           const a = await add(token);
           notice = a.error ? 'Account saved. Quota check needs attention.' : 'Account connected and quotas checked.';
+          break;
+        }
+        case 'chromeImport': {
+          const found = chrome.discover();
+          if (!found.executable || !found.profiles.length) throw new Error('No Google Chrome profiles were found on this device.');
+          const selected = await vscode.window.showQuickPick(found.profiles.map(profile => ({
+            label: profile.name,
+            description: profile.email || 'No Google account shown by Chrome',
+            profile,
+            picked: true
+          })), { canPickMany: true, placeHolder: 'Choose Chrome profiles to connect', title: 'Import accounts from Chrome profiles' });
+          if (!selected?.length) { notice = 'Chrome profile import cancelled.'; break; }
+          const failures = [];
+          let connected = 0;
+          await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
+            title: 'Connecting Chrome profiles', cancellable: true }, async (progress, cancellation) => {
+            for (let index = 0; index < selected.length; index++) {
+              if (cancellation.isCancellationRequested) break;
+              const item = selected[index];
+              progress.report({ message: `${item.label} (${index + 1}/${selected.length})` });
+              try {
+                const token = await signIn(config, url => chrome.openProfile(found.executable, item.profile.directory, url), cancellation,
+                  { loginHint: item.profile.email });
+                await add(token);
+                connected++;
+              } catch {
+                if (cancellation.isCancellationRequested) break;
+                failures.push(item.label);
+              }
+            }
+          });
+          notice = `${connected} Chrome profile${connected === 1 ? '' : 's'} connected.` +
+            (failures.length ? ` ${failures.length} skipped or failed.` : '');
           break;
         }
         case 'refresh':

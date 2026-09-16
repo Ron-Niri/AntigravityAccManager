@@ -2,7 +2,7 @@
   "name": "antigravity-account-manager",
   "displayName": "Antigravity Account Manager",
   "description": "Local multi-account quota dashboard and experimental session switching for Antigravity IDE.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "Ron-Niri",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
@@ -94,7 +94,7 @@
     "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links",
     "audit:privacy": "node scripts/audit-privacy.cjs",
     "test": "node --test test/core.test.cjs test/monitor.test.cjs",
-    "check": "node --check src/extension.cjs && node --check src/core.cjs && node --check src/oauth.cjs && node --check src/ide-state.cjs && node --check src/switch.cjs && node --check src/monitor.cjs && node --check src/scan.cjs && node --check media/panel.js && node --check media/readiness.js"
+    "check": "node --check src/extension.cjs && node --check src/core.cjs && node --check src/oauth.cjs && node --check src/ide-state.cjs && node --check src/switch.cjs && node --check src/monitor.cjs && node --check src/scan.cjs && node --check src/chrome.cjs && node --check media/panel.js && node --check media/readiness.js"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

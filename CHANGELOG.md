@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Fix sidebar controls failing to initialize in the published extension.
+- Add an opt-in importer that connects selected Google Chrome profiles through OAuth.
+- Add a packaged-sidebar regression check.
+
 ## 0.5.0
 
 - Scan up to five accounts concurrently and reuse recently discovered account projects.

@@ -2,7 +2,7 @@ const http = require('node:http');
 const { randomBytes, createHash } = require('node:crypto');
 const { jsonRequest } = require('./core.cjs');
 
-async function signIn(config, openExternal, cancellation) {
+async function signIn(config, openExternal, cancellation, options = {}) {
   const state = randomBytes(32).toString('hex');
   const verifier = randomBytes(48).toString('base64url');
   let complete, fail;
@@ -27,9 +27,11 @@ async function signIn(config, openExternal, cancellation) {
   const subscription = cancellation?.onCancellationRequested(() => fail(new Error('Sign-in cancelled.')));
   try {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.search = new URLSearchParams({ client_id: config.clientId, redirect_uri: redirect, response_type: 'code',
+    const parameters = { client_id: config.clientId, redirect_uri: redirect, response_type: 'code',
       scope: config.scopes.join(' '), access_type: 'offline', prompt: 'consent select_account', state,
-      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' }).toString();
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' };
+    if (options.loginHint) parameters.login_hint = options.loginHint;
+    url.search = new URLSearchParams(parameters).toString();
     if (!await openExternal(url.toString())) throw new Error('Could not open the sign-in browser.');
     const code = await codePromise;
     const result = await jsonRequest('https://oauth2.googleapis.com/token', { method: 'POST', body: new URLSearchParams({

@@ -19,10 +19,12 @@ A sidebar extension for Antigravity IDE that brings your Google accounts, model 
 
 1. Install the VSIX through **Extensions: Install from VSIX** in Antigravity IDE, then reload the window.
 2. Open the **Accounts** icon in the activity bar.
-3. Choose **Use IDE account** to save your current session, or **Connect account** to sign in through Google.
+3. Choose **Use IDE account** to save your current session, **Connect account** to sign in through Google, or **Import Chrome profiles** to connect several Chrome profiles in sequence.
 4. Add your other accounts. Select a model or use the search box to narrow the list.
 
 Use accounts you own or are authorized to access. New accounts must complete Antigravity’s onboarding in the IDE before they can be used here.
+
+Chrome import reads Chrome's profile names and signed-in email hints from its local profile index. It does not read cookies or passwords. You choose the profiles, and Google authorization opens in each selected Chrome profile; each account still requires its own explicit OAuth approval.
 
 ## Switch accounts
 

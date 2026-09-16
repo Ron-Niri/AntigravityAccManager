@@ -8,7 +8,8 @@ const preferences = api.getState() || { collapsed: {}, query: '', available: fal
 preferences.collapsed ||= {};
 el('model').value = preferences.query || '';
 el('available').checked = !!preferences.available;
-for (const name of ['login', 'import', 'refresh', 'restore']) el(name).onclick = () => send(name);
+function send(type, id) { api.postMessage({ type, id }); }
+for (const name of ['login', 'import', 'chromeImport', 'refresh', 'restore']) el(name).onclick = () => send(name);
 if (el('github-link')) el('github-link').onclick = () => send('github');
 if (el('github-footer')) el('github-footer').onclick = () => send('github');
 function filter() { preferences.query = el('model').value; preferences.available = el('available').checked; preferences.selectedModel = el('selected-model').value; api.setState(preferences); render(); }
@@ -71,7 +72,7 @@ function render() {
   el('notice').textContent = state.notice || ''; el('notice').hidden = !state.notice;
   el('count').textContent = state.accounts.length;
   el('activity').textContent = state.busy ? 'Updating…' : 'On demand';
-  for (const name of ['login', 'import', 'refresh', 'restore']) el(name).disabled = state.busy;
+  for (const name of ['login', 'import', 'chromeImport', 'refresh', 'restore']) el(name).disabled = state.busy;
   el('empty').hidden = state.accounts.length > 0;
   el('accounts').replaceChildren();
   const query = el('model').value.toLowerCase().trim();

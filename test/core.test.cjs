@@ -6,6 +6,8 @@ const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
+const { profilesFromState } = require('../src/chrome.cjs');
+const fs = require('node:fs');
 
 test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
   let running = 0, maximum = 0;
@@ -17,6 +19,22 @@ test('account scans run concurrently with a fixed upper bound and visit every ac
   });
   assert.equal(maximum, 5);
   assert.equal(new Set(visited).size, 28);
+});
+test('packaged sidebar defines its message bridge before binding buttons', () => {
+  const panel = fs.readFileSync(require.resolve('../media/panel.js'), 'utf8');
+  const definition = panel.indexOf('function send(');
+  assert.ok(definition >= 0);
+  assert.ok(definition < panel.indexOf('send(name)'));
+  for (const control of ['login', 'import', 'chromeImport', 'refresh', 'restore']) assert.match(panel, new RegExp(`['\"]${control}['\"]`));
+});
+test('Chrome profile discovery uses public profile metadata only', () => {
+  assert.deepEqual(profilesFromState({ profile: { info_cache: {
+    'Profile 2': { name: 'Work', user_name: 'work@example.com' },
+    Default: { name: 'Personal' }
+  } } }), [
+    { directory: 'Default', name: 'Personal', email: '' },
+    { directory: 'Profile 2', name: 'Work', email: 'work@example.com' }
+  ]);
 });
 test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
   const original = global.fetch, urls = [], cache = {};
@@ -145,13 +163,14 @@ test('OAuth rejects wrong state and exchanges a valid callback using matching PK
   try {
     const token = await signIn({ clientId: 'test', clientSecret: 'test', scopes: ['test'] }, async login => {
       const auth = new URL(login);
+      assert.equal(auth.searchParams.get('login_hint'), 'profile@example.com');
       challenge = auth.searchParams.get('code_challenge'); redirect = auth.searchParams.get('redirect_uri');
       const rejected = await fetch(`${redirect}?state=wrong&code=invalid`);
       assert.equal(rejected.status, 400);
       const accepted = await fetch(`${redirect}?state=${auth.searchParams.get('state')}&code=test-code`);
       assert.equal(accepted.status, 200);
       return true;
-    });
+    }, undefined, { loginHint: 'profile@example.com' });
     assert.equal(token.refreshToken, 'test-refresh');
   } finally { global.fetch = original; }
 });

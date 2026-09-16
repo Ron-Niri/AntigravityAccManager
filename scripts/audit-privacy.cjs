@@ -2,7 +2,8 @@ const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
-const git = args => execFileSync('git', ['-c', `safe.directory=${root}`, ...args], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+const safeRoot = root.replaceAll('\\', '/');
+const git = args => execFileSync('git', ['-c', `safe.directory=${safeRoot}`, ...args], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
 const findings = [];
 // Default includes fetched remote history. Local-only mode helps validate a
 // replacement before an explicitly authorized remote history update.
@@ -24,7 +25,7 @@ inspect('commit metadata', git(['log', ...revisions, '--format=%an <%ae>%n%cn <%
 const objects = git(['rev-list', '--objects', ...revisions]).toString().trim().split('\n').map(line => {
   const split = line.indexOf(' '); return { id: split < 0 ? line : line.slice(0, split), name: split < 0 ? '' : line.slice(split + 1) };
 });
-const batch = execFileSync('git', ['-c', `safe.directory=${root}`, 'cat-file', '--batch'], {
+const batch = execFileSync('git', ['-c', `safe.directory=${safeRoot}`, 'cat-file', '--batch'], {
   cwd: root, input: objects.map(o => o.id).join('\n') + '\n', maxBuffer: 64 * 1024 * 1024
 });
 let offset = 0, blobs = 0;
