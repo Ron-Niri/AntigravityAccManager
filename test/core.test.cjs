@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
-const { profilesFromState, profileAccounts, uniqueAccounts } = require('../src/chrome.cjs');
+const { profilesFromState, profileAccounts, uniqueAccounts, openProfile } = require('../src/chrome.cjs');
 const fs = require('node:fs');
 
 test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
@@ -26,6 +26,10 @@ test('packaged sidebar defines its message bridge before binding buttons', () =>
   assert.ok(definition >= 0);
   assert.ok(definition < panel.indexOf('send(name)'));
   for (const control of ['login', 'import', 'chromeImport', 'refresh', 'restore']) assert.match(panel, new RegExp(`['\"]${control}['\"]`));
+});
+test('account cards are collapsed by default and only open from saved state or search', () => {
+  const panel = fs.readFileSync(require.resolve('../media/panel.js'), 'utf8');
+  assert.match(panel, /card\.open = query \? true : preferences\.collapsed\[a\.id\] === false/);
 });
 test('Chrome profile discovery uses public profile metadata only', () => {
   assert.deepEqual(profilesFromState({ profile: { info_cache: {
@@ -57,6 +61,13 @@ test('Chrome import opens only one login for an account present in multiple prof
     { directory: 'Default', email: 'same@example.com' },
     { directory: 'Profile 1', email: 'other@example.com' }
   ]);
+});
+test('Chrome OAuth opens in a dedicated app window that the callback can close', () => {
+  let invocation;
+  const child = { unref() {} };
+  assert.equal(openProfile('chrome.exe', 'Profile 1', 'https://example.com/oauth', (...args) => { invocation = args; return child; }), true);
+  assert.deepEqual(invocation[1], ['--profile-directory=Profile 1', '--app=https://example.com/oauth']);
+  assert.equal(invocation[2].detached, true);
 });
 test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
   const original = global.fetch, urls = [], cache = {};
@@ -192,8 +203,9 @@ test('OAuth rejects wrong state and exchanges a valid callback using matching PK
       assert.equal(rejected.status, 400);
       const accepted = await fetch(`${redirect}?state=${auth.searchParams.get('state')}&code=test-code`);
       assert.equal(accepted.status, 200);
+      assert.match(await accepted.text(), /window\.close\(\)/);
       return true;
-    }, undefined, { loginHint: 'profile@example.com', selectAccount: false });
+    }, undefined, { loginHint: 'profile@example.com', selectAccount: false, closeWindow: true });
     assert.equal(token.refreshToken, 'test-refresh');
   } finally { global.fetch = original; }
 });

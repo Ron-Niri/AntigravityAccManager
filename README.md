@@ -28,6 +28,8 @@ Chrome import reads Chrome's profile names and account email hints from its loca
 
 Accounts already connected to the extension, and duplicate account hints found in more than one Chrome profile, are skipped automatically. If an authorization window is closed or abandoned, that account times out after 45 seconds and the batch continues with the next account.
 
+Chrome authorization uses a temporary app window. After Google returns the authorization result, that window closes automatically before the next account starts. If Chrome blocks automatic closing, the callback page also includes a **Close window** button.
+
 ## Switch accounts
 
 Choose **Switch account** on a saved account. Finish or stop running agent tasks first: switching restarts the language server. The extension verifies the resulting token and profile, marks the account **Active**, and saves the previous session for restoration.

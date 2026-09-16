@@ -83,7 +83,7 @@ function render() {
     if (selected && !models.length) continue;
     if (!models.length && (query || el('available').checked) && !(accountMatch && !el('available').checked)) continue;
     visible++;
-    const card = node('details', undefined, 'account'); card.open = query ? true : !preferences.collapsed[a.id];
+    const card = node('details', undefined, 'account'); card.open = query ? true : preferences.collapsed[a.id] === false;
     card.addEventListener('toggle', () => { if (!card.isConnected || query) return; preferences.collapsed[a.id] = !card.open; api.setState(preferences); });
     const heading = node('summary');
     const identity = node('div', undefined, 'identity'), email = node('div', a.email, 'email'); email.title = a.email;

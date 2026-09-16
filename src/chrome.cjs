@@ -54,8 +54,8 @@ function discover(environment = process.env) {
   return { executable, profiles, accounts: uniqueAccounts(profiles.flatMap(profile => profileAccounts(userData, profile))) };
 }
 
-function openProfile(executable, directory, url) {
-  const child = spawn(executable, [`--profile-directory=${directory}`, '--new-window', url], {
+function openProfile(executable, directory, url, launch = spawn) {
+  const child = launch(executable, [`--profile-directory=${directory}`, `--app=${url}`], {
     detached: true, stdio: 'ignore', windowsHide: false
   });
   child.unref();

@@ -9,16 +9,27 @@ async function signIn(config, openExternal, cancellation, options = {}) {
   const codePromise = new Promise((resolve, reject) => { complete = resolve; fail = reject; });
   // Attach immediately so cancellation during browser launch is handled.
   codePromise.catch(() => {});
+  function callbackPage(message) {
+    if (!options.closeWindow) return message;
+    const nonce = randomBytes(18).toString('base64');
+    return { nonce, html: `<!doctype html><meta charset="utf-8"><title>Antigravity Accounts</title><p>${message}</p><button onclick="window.close()">Close window</button><script nonce="${nonce}">setTimeout(()=>window.close(),100);</script>` };
+  }
+  function respond(res, message) {
+    const page = callbackPage(message);
+    res.setHeader('Cache-Control', 'no-store');
+    if (typeof page === 'string') { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end(page); return; }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${page.nonce}'; style-src 'none'`);
+    res.end(page.html);
+  }
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method !== 'GET' || url.pathname !== '/oauth-callback') { res.writeHead(404).end(); return; }
     if (url.searchParams.get('state') !== state) { res.writeHead(400).end('Invalid sign-in state.'); return; }
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    if (url.searchParams.has('error')) { res.end('Sign-in was cancelled. You can close this tab.'); fail(new Error('Google sign-in was cancelled.')); return; }
+    if (url.searchParams.has('error')) { respond(res, 'Sign-in was cancelled.'); fail(new Error('Google sign-in was cancelled.')); return; }
     const code = url.searchParams.get('code');
     if (!code) { res.writeHead(400).end('Missing authorization code.'); return; }
-    res.end('Sign-in received. Return to Antigravity Accounts. You can close this tab.');
+    respond(res, options.closeWindow ? 'Sign-in received. This window will close automatically.' : 'Sign-in received. Return to Antigravity Accounts. You can close this tab.');
     complete(code);
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });

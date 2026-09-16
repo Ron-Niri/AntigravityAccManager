@@ -157,7 +157,7 @@ function activate(context) {
               progress.report({ message: `${item.label} (${index + 1}/${selected.length})` });
               try {
                 const token = await signIn(config, url => chrome.openProfile(found.executable, item.account.directory, url), cancellation,
-                  { loginHint: item.account.email, selectAccount: false, timeoutMs: 45000 });
+                  { loginHint: item.account.email, selectAccount: false, timeoutMs: 45000, closeWindow: true });
                 await add(token);
                 connected++;
               } catch {

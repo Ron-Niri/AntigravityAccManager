@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- Open Chrome imports in dedicated app windows and close each window automatically after its OAuth callback succeeds or is cancelled.
+- Keep account cards collapsed by default while preserving explicitly opened cards.
+
 ## 0.5.3
 
 - Skip Chrome accounts that are already connected or duplicated across profiles.
