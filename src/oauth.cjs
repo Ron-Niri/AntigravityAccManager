@@ -23,7 +23,8 @@ async function signIn(config, openExternal, cancellation, options = {}) {
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const redirect = `http://localhost:${server.address().port}/oauth-callback`;
-  const timer = setTimeout(() => fail(new Error('Sign-in timed out. Please try again.')), 180000);
+  const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 180000;
+  const timer = setTimeout(() => fail(new Error('Sign-in timed out. Please try again.')), timeoutMs);
   const subscription = cancellation?.onCancellationRequested(() => fail(new Error('Sign-in cancelled.')));
   try {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');

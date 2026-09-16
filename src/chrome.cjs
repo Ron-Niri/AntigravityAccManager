@@ -35,13 +35,23 @@ function profileAccounts(userDataPath, profile, readFile = fs.readFileSync) {
   return emails.map(email => ({ directory: profile.directory, profileName: profile.name, email }));
 }
 
+function uniqueAccounts(accounts) {
+  const seen = new Set();
+  return accounts.filter(account => {
+    const key = account.email.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function discover(environment = process.env) {
   const executable = chromePaths(environment).find(candidate => fs.existsSync(candidate));
   const localState = environment.LOCALAPPDATA && path.join(environment.LOCALAPPDATA, 'Google', 'Chrome', 'User Data', 'Local State');
   if (!executable || !localState || !fs.existsSync(localState)) return { executable, profiles: [], accounts: [] };
   const profiles = readProfiles(localState);
   const userData = path.dirname(localState);
-  return { executable, profiles, accounts: profiles.flatMap(profile => profileAccounts(userData, profile)) };
+  return { executable, profiles, accounts: uniqueAccounts(profiles.flatMap(profile => profileAccounts(userData, profile))) };
 }
 
 function openProfile(executable, directory, url) {
@@ -52,4 +62,4 @@ function openProfile(executable, directory, url) {
   return true;
 }
 
-module.exports = { chromePaths, profilesFromState, readProfiles, profileAccounts, discover, openProfile };
+module.exports = { chromePaths, profilesFromState, readProfiles, profileAccounts, uniqueAccounts, discover, openProfile };

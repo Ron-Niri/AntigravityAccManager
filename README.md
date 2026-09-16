@@ -26,6 +26,8 @@ Use accounts you own or are authorized to access. New accounts must complete Ant
 
 Chrome import reads Chrome's profile names and account email hints from its local profile metadata, including multiple Google accounts within one profile. It does not read cookies or passwords. You choose the accounts, and Google authorization opens in each account's Chrome profile; each account still requires its own explicit OAuth approval.
 
+Accounts already connected to the extension, and duplicate account hints found in more than one Chrome profile, are skipped automatically. If an authorization window is closed or abandoned, that account times out after 45 seconds and the batch continues with the next account.
+
 ## Switch accounts
 
 Choose **Switch account** on a saved account. Finish or stop running agent tasks first: switching restarts the language server. The extension verifies the resulting token and profile, marks the account **Active**, and saves the previous session for restoration.

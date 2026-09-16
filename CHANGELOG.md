@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Skip Chrome accounts that are already connected or duplicated across profiles.
+- Skip abandoned Chrome authorization windows after 45 seconds instead of blocking the remaining batch.
+
 ## 0.5.2
 
 - Enumerate every Google account recorded in each Chrome profile instead of importing only the primary account.

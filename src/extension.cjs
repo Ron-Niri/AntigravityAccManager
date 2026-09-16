@@ -137,7 +137,10 @@ function activate(context) {
           const found = chrome.discover();
           if (!found.executable || !found.profiles.length) throw new Error('No Google Chrome profiles were found on this device.');
           if (!found.accounts.length) throw new Error('Chrome did not report any Google accounts in its profiles.');
-          const selected = await vscode.window.showQuickPick(found.accounts.map(account => ({
+          const savedEmails = new Set(accounts.map(account => account.email.toLowerCase()));
+          const pendingAccounts = found.accounts.filter(account => !savedEmails.has(account.email.toLowerCase()));
+          if (!pendingAccounts.length) { notice = 'All Chrome accounts are already connected.'; break; }
+          const selected = await vscode.window.showQuickPick(pendingAccounts.map(account => ({
             label: account.email,
             description: `Chrome profile: ${account.profileName}`,
             account,
@@ -154,7 +157,7 @@ function activate(context) {
               progress.report({ message: `${item.label} (${index + 1}/${selected.length})` });
               try {
                 const token = await signIn(config, url => chrome.openProfile(found.executable, item.account.directory, url), cancellation,
-                  { loginHint: item.account.email, selectAccount: false });
+                  { loginHint: item.account.email, selectAccount: false, timeoutMs: 45000 });
                 await add(token);
                 connected++;
               } catch {

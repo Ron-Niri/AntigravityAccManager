@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
-const { profilesFromState, profileAccounts } = require('../src/chrome.cjs');
+const { profilesFromState, profileAccounts, uniqueAccounts } = require('../src/chrome.cjs');
 const fs = require('node:fs');
 
 test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
@@ -47,6 +47,16 @@ test('Chrome import enumerates every account in a profile and removes duplicate 
 });
 test('Chrome profile paths cannot escape the user data directory', () => {
   assert.deepEqual(profileAccounts('ignored', { directory: '..', name: 'Invalid', email: 'test@example.com' }), []);
+});
+test('Chrome import opens only one login for an account present in multiple profiles', () => {
+  assert.deepEqual(uniqueAccounts([
+    { directory: 'Default', email: 'same@example.com' },
+    { directory: 'Profile 1', email: 'SAME@example.com' },
+    { directory: 'Profile 1', email: 'other@example.com' }
+  ]), [
+    { directory: 'Default', email: 'same@example.com' },
+    { directory: 'Profile 1', email: 'other@example.com' }
+  ]);
 });
 test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
   const original = global.fetch, urls = [], cache = {};
@@ -186,4 +196,8 @@ test('OAuth rejects wrong state and exchanges a valid callback using matching PK
     }, undefined, { loginHint: 'profile@example.com', selectAccount: false });
     assert.equal(token.refreshToken, 'test-refresh');
   } finally { global.fetch = original; }
+});
+test('abandoned OAuth windows time out instead of blocking an import batch', async () => {
+  await assert.rejects(signIn({ clientId: 'test', clientSecret: 'test', scopes: ['test'] }, async () => true,
+    undefined, { timeoutMs: 5 }), { message: 'Sign-in timed out. Please try again.' });
 });
