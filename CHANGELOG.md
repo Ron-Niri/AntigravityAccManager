@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Enumerate every Google account recorded in each Chrome profile instead of importing only the primary account.
+- Open authorization in the owning Chrome profile with the selected account as the login hint.
+
 ## 0.5.1
 
 - Fix sidebar controls failing to initialize in the published extension.

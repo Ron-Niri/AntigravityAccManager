@@ -136,12 +136,13 @@ function activate(context) {
         case 'chromeImport': {
           const found = chrome.discover();
           if (!found.executable || !found.profiles.length) throw new Error('No Google Chrome profiles were found on this device.');
-          const selected = await vscode.window.showQuickPick(found.profiles.map(profile => ({
-            label: profile.name,
-            description: profile.email || 'No Google account shown by Chrome',
-            profile,
+          if (!found.accounts.length) throw new Error('Chrome did not report any Google accounts in its profiles.');
+          const selected = await vscode.window.showQuickPick(found.accounts.map(account => ({
+            label: account.email,
+            description: `Chrome profile: ${account.profileName}`,
+            account,
             picked: true
-          })), { canPickMany: true, placeHolder: 'Choose Chrome profiles to connect', title: 'Import accounts from Chrome profiles' });
+          })), { canPickMany: true, placeHolder: 'Choose Google accounts to connect', title: 'Import accounts from Chrome' });
           if (!selected?.length) { notice = 'Chrome profile import cancelled.'; break; }
           const failures = [];
           let connected = 0;
@@ -152,8 +153,8 @@ function activate(context) {
               const item = selected[index];
               progress.report({ message: `${item.label} (${index + 1}/${selected.length})` });
               try {
-                const token = await signIn(config, url => chrome.openProfile(found.executable, item.profile.directory, url), cancellation,
-                  { loginHint: item.profile.email });
+                const token = await signIn(config, url => chrome.openProfile(found.executable, item.account.directory, url), cancellation,
+                  { loginHint: item.account.email, selectAccount: false });
                 await add(token);
                 connected++;
               } catch {

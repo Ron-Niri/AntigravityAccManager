@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { summarize } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
-const { profilesFromState } = require('../src/chrome.cjs');
+const { profilesFromState, profileAccounts } = require('../src/chrome.cjs');
 const fs = require('node:fs');
 
 test('account scans run concurrently with a fixed upper bound and visit every account', async () => {
@@ -35,6 +35,18 @@ test('Chrome profile discovery uses public profile metadata only', () => {
     { directory: 'Default', name: 'Personal', email: '' },
     { directory: 'Profile 2', name: 'Work', email: 'work@example.com' }
   ]);
+});
+test('Chrome import enumerates every account in a profile and removes duplicate hints', () => {
+  const readFile = () => JSON.stringify({ account_info: [
+    { email: 'second@example.com' }, { email: 'first@example.com' }, { email: 'second@example.com' }
+  ] });
+  assert.deepEqual(profileAccounts('ignored', { directory: 'Profile 1', name: 'Work', email: 'first@example.com' }, readFile), [
+    { directory: 'Profile 1', profileName: 'Work', email: 'second@example.com' },
+    { directory: 'Profile 1', profileName: 'Work', email: 'first@example.com' }
+  ]);
+});
+test('Chrome profile paths cannot escape the user data directory', () => {
+  assert.deepEqual(profileAccounts('ignored', { directory: '..', name: 'Invalid', email: 'test@example.com' }), []);
 });
 test('warm quota checks reuse the account project instead of repeating onboarding discovery', async () => {
   const original = global.fetch, urls = [], cache = {};
@@ -164,13 +176,14 @@ test('OAuth rejects wrong state and exchanges a valid callback using matching PK
     const token = await signIn({ clientId: 'test', clientSecret: 'test', scopes: ['test'] }, async login => {
       const auth = new URL(login);
       assert.equal(auth.searchParams.get('login_hint'), 'profile@example.com');
+      assert.equal(auth.searchParams.get('prompt'), 'consent');
       challenge = auth.searchParams.get('code_challenge'); redirect = auth.searchParams.get('redirect_uri');
       const rejected = await fetch(`${redirect}?state=wrong&code=invalid`);
       assert.equal(rejected.status, 400);
       const accepted = await fetch(`${redirect}?state=${auth.searchParams.get('state')}&code=test-code`);
       assert.equal(accepted.status, 200);
       return true;
-    }, undefined, { loginHint: 'profile@example.com' });
+    }, undefined, { loginHint: 'profile@example.com', selectAccount: false });
     assert.equal(token.refreshToken, 'test-refresh');
   } finally { global.fetch = original; }
 });

@@ -28,7 +28,7 @@ async function signIn(config, openExternal, cancellation, options = {}) {
   try {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     const parameters = { client_id: config.clientId, redirect_uri: redirect, response_type: 'code',
-      scope: config.scopes.join(' '), access_type: 'offline', prompt: 'consent select_account', state,
+      scope: config.scopes.join(' '), access_type: 'offline', prompt: options.selectAccount === false ? 'consent' : 'consent select_account', state,
       code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' };
     if (options.loginHint) parameters.login_hint = options.loginHint;
     url.search = new URLSearchParams(parameters).toString();

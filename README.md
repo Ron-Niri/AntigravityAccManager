@@ -24,7 +24,7 @@ A sidebar extension for Antigravity IDE that brings your Google accounts, model 
 
 Use accounts you own or are authorized to access. New accounts must complete Antigravity’s onboarding in the IDE before they can be used here.
 
-Chrome import reads Chrome's profile names and signed-in email hints from its local profile index. It does not read cookies or passwords. You choose the profiles, and Google authorization opens in each selected Chrome profile; each account still requires its own explicit OAuth approval.
+Chrome import reads Chrome's profile names and account email hints from its local profile metadata, including multiple Google accounts within one profile. It does not read cookies or passwords. You choose the accounts, and Google authorization opens in each account's Chrome profile; each account still requires its own explicit OAuth approval.
 
 ## Switch accounts
 
