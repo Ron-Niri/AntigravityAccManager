@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.6
+
+- Hide rolling seven-day reset timestamps for models whose quota is reported as full.
+- Show exhausted accounts and their reset times in a collapsed selected-model summary.
+- Recheck exhausted quotas when their reported reset time passes, with bounded retries.
+
 ## 0.5.5
 
 - Close each completed Chrome login window through a uniquely targeted Windows message.

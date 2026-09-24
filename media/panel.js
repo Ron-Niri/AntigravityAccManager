@@ -34,10 +34,10 @@ function chevron() {
   svg.setAttribute('viewBox', '0 0 12 12'); svg.setAttribute('class', 'chevron'); svg.setAttribute('aria-hidden', 'true');
   const p = document.createElementNS(svg.namespaceURI, 'path'); p.setAttribute('d', 'm4 2 4 4-4 4'); svg.append(p); return svg;
 }
-function resetLabel(time) {
+function resetLabel(time, status) {
   if (!time) return 'Reset not reported';
   const delta = Date.parse(time) - Date.now();
-  if (delta <= 0) return 'Reset due · recheck';
+  if (delta <= 0) return status === 'exhausted' ? 'Reset time passed · still exhausted' : 'Reset due · recheck';
   const minutes = Math.ceil(delta / 60000), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
   return `Resets in ${days ? `${days}d ${hours % 24}h` : hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`}`;
 }
@@ -64,6 +64,8 @@ function render() {
   el('switch-offer').hidden = !state.pendingOffer;
   el('offer-text').textContent = state.pendingOffer ? `${state.pendingOffer.model} is exhausted on ${state.pendingOffer.from}. ${state.pendingOffer.to} has quota available.` : '';
   const matches = state.accounts.filter(a => !a.error && a.models.some(m => m.id === selected && m.status === 'available'));
+  const waiting = state.accounts.flatMap(a => a.error ? [] : a.models.filter(m => m.id === selected && m.fraction === 0)
+    .map(m => ({ email: a.email, resetTime: m.resetTime, status: m.status })));
   const result = el('model-result'); result.hidden = !selected; result.replaceChildren();
   if (selected) {
     const readyAccounts = node('details', undefined, 'ready-accounts');
@@ -77,6 +79,17 @@ function render() {
       readyAccounts.append(readyList);
     } else readyAccounts.append(node('p', 'No fresh available quota.', 'ready-empty'));
     result.append(readyAccounts);
+    if (waiting.length) {
+      const waitingAccounts = node('details', undefined, 'ready-accounts waiting-accounts');
+      const waitingSummary = node('summary');
+      waitingSummary.append(node('strong', `${waiting.length} waiting for reset`));
+      waitingSummary.append(node('span', 'Show accounts', 'ready-toggle'));
+      waitingAccounts.append(waitingSummary);
+      const waitingList = node('div', undefined, 'ready-list');
+      for (const account of waiting) waitingList.append(node('span', `${account.email} · ${resetLabel(account.resetTime, account.status)}`));
+      waitingAccounts.append(waitingList);
+      result.append(waitingAccounts);
+    }
   }
   el('notice').textContent = state.notice || ''; el('notice').hidden = !state.notice;
   el('count').textContent = state.accounts.length;
@@ -122,7 +135,8 @@ function render() {
         top.append(providerIcon(m.id), label, percent);
         const bottom = node('div', undefined, 'model-meta');
         const names = { available: 'Available', exhausted: 'Exhausted', stale: 'Stale', recheck: 'Recheck', unknown: 'Unknown' };
-        const reset = node('span', resetLabel(m.resetTime), 'reset'); if (m.resetTime) reset.title = new Date(m.resetTime).toLocaleString();
+        const reset = node('span', m.fraction === 1 ? (status === 'stale' ? 'Full at last check' : 'Quota reported full') : resetLabel(m.resetTime, status), 'reset');
+        if (m.resetTime && m.fraction !== 1) reset.title = new Date(m.resetTime).toLocaleString();
         bottom.append(node('span', names[status] || 'Unknown', `status ${status}`), reset);
         row.append(top, bottom);
         if (m.fraction !== null) { const p = node('progress'); p.max = 1; p.value = m.fraction; p.setAttribute('aria-label', `${m.label}: ${Math.round(m.fraction * 100)}% remaining`); row.append(p); }

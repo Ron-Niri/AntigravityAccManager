@@ -73,9 +73,18 @@ function normalizeModels(response, checkedAt = new Date().toISOString()) {
 }
 
 function availability(model, now = Date.now()) {
+  if (model.status === 'exhausted' && model.resetTime && Date.parse(model.resetTime) <= now
+    && Date.parse(model.checkedAt) < Date.parse(model.resetTime)) return 'recheck';
   if (now - Date.parse(model.checkedAt) > 5 * 60000) return 'stale';
-  if (model.status === 'exhausted' && model.resetTime && Date.parse(model.resetTime) <= now) return 'recheck';
   return model.status;
+}
+
+function resetDue(account, now = Date.now()) {
+  if (account.error && now - Date.parse(account.lastQuotaAttemptAt) < 2 * 60000) return false;
+  return (account.models || []).some(model => model.status === 'exhausted' && model.resetTime
+    && Date.parse(model.resetTime) <= now
+    && (account.error || !Number.isFinite(Date.parse(model.checkedAt)) || Date.parse(model.checkedAt) < Date.parse(model.resetTime)
+      || now - Date.parse(model.checkedAt) >= 5 * 60000));
 }
 
 async function quotas(token, config, cache) {
@@ -104,4 +113,4 @@ async function accountData(token, config, includeSettings = false, cache) {
   return { catalog, info, settings };
 }
 
-module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, accountData, normalizeModels, availability };
+module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, accountData, normalizeModels, availability, resetDue };

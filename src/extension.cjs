@@ -53,6 +53,7 @@ function activate(context) {
         error: a.error, models: (a.models || []).map(m => ({ ...m, status: core.availability(m) })) })) });
   }
   async function check(a, persist = true) {
+    a.lastQuotaAttemptAt = new Date().toISOString();
     try {
       a.token = await core.refreshToken(a.token, config);
       const result = await core.quotas(a.token, config, a.quotaCache ||= {});
@@ -60,10 +61,10 @@ function activate(context) {
     } catch (error) { a.error = error.message; }
     if (persist) await save();
   }
-  async function checkMany(list) {
+  async function checkMany(list, showProgress = true) {
     try {
       await scanAccounts(list, a => check(a, false), { onProgress: (done, total) => {
-        notice = `Checked ${done}/${total} accounts`; void render();
+        if (showProgress) { notice = `Checked ${done}/${total} accounts`; void render(); }
       } });
     } finally { await save(); }
   }
@@ -225,11 +226,22 @@ function activate(context) {
     switchAccount: async a => { if (busy) throw new Error('Another account operation is running.'); busy = true; try { await switchAccount(a, true); } finally { busy = false; await render(); } }
   });
   const monitorTimer = setInterval(() => { void ready.then(() => monitor.tick()).catch(() => {}); }, 20000);
+  let renewing = false;
+  async function renewDue() {
+    await ready;
+    if (renewing || busy || !vscode.window.state.focused) return;
+    const due = accounts.filter(a => core.resetDue(a));
+    if (!due.length) return;
+    renewing = true; busy = true;
+    try { await checkMany(due, false); }
+    finally { busy = false; renewing = false; await render(); }
+  }
+  const renewalTimer = setInterval(() => { void renewDue().catch(() => {}); }, 30000);
   context.subscriptions.push(vscode.window.onDidChangeWindowState(state => {
     if (!state.focused) finishOffer('cancelled');
     else void ready.then(() => monitor.tick()).catch(() => {});
   }));
-  context.subscriptions.push({ dispose: () => { monitorConfig = { ...monitorConfig, enabled: false }; finishOffer('cancelled'); monitor.releaseLease(); clearInterval(monitorTimer); } });
+  context.subscriptions.push({ dispose: () => { monitorConfig = { ...monitorConfig, enabled: false }; finishOffer('cancelled'); monitor.releaseLease(); clearInterval(monitorTimer); clearInterval(renewalTimer); } });
   context.subscriptions.push(vscode.commands.registerCommand('agm.open', () => vscode.commands.executeCommand('agm.accounts.focus')));
   context.subscriptions.push(vscode.commands.registerCommand('agm.refresh', () => action({ type: 'refresh' })));
   context.subscriptions.push(vscode.commands.registerCommand('agm.connect', () => action({ type: 'login' })));

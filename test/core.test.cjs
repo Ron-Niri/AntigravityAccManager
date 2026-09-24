@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeModels, availability, refreshToken, quotas } = require('../src/core.cjs');
+const { normalizeModels, availability, resetDue, refreshToken, quotas } = require('../src/core.cjs');
 const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
 const { summarize, visibleForSelection } = require('../media/readiness.js');
@@ -159,9 +159,25 @@ test('missing quota is unknown, zero is exhausted; invalid fractions never imply
 });
 test('passed reset times require rechecking; stale capacity is not presented as available', () => {
   const now = Date.now();
-  const m = { checkedAt: new Date(now).toISOString(), status: 'exhausted', resetTime: new Date(now - 1000).toISOString() };
+  const m = { checkedAt: new Date(now - 2000).toISOString(), status: 'exhausted', resetTime: new Date(now - 1000).toISOString() };
   assert.equal(availability(m, now), 'recheck');
   assert.equal(availability({ ...m, status: 'available', checkedAt: new Date(now - 360000).toISOString() }, now), 'stale');
+  assert.equal(availability({ ...m, checkedAt: new Date(now - 360000).toISOString() }, now), 'recheck');
+  assert.equal(availability({ ...m, checkedAt: new Date(now).toISOString() }, now), 'exhausted');
+});
+test('renewal refreshes a newly due exhausted quota, then backs off for five minutes', () => {
+  const now = Date.now();
+  const resetTime = new Date(now - 1000).toISOString();
+  const account = { models: [{ status: 'exhausted', resetTime, checkedAt: new Date(now - 360000).toISOString() }] };
+  assert.equal(resetDue(account, now), true);
+  account.models[0].checkedAt = new Date(now).toISOString();
+  assert.equal(resetDue(account, now), false);
+  assert.equal(resetDue(account, now + 5 * 60000), true);
+  account.models[0].status = 'available';
+  assert.equal(resetDue(account, now + 5 * 60000), false);
+  account.models[0].status = 'exhausted'; account.error = 'offline'; account.lastQuotaAttemptAt = new Date(now).toISOString();
+  assert.equal(resetDue(account, now + 60000), false);
+  assert.equal(resetDue(account, now + 2 * 60000), true);
 });
 test('unknown response schema fails explicitly', () => {
   assert.throws(() => normalizeModels({ arbitrary: [] }), /Unrecognized/);

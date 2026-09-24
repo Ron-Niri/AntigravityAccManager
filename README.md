@@ -58,9 +58,9 @@ The monitor rechecks both accounts before switching. Network errors and missing 
 | Recheck | A reported reset time has passed; availability needs confirmation. |
 | Unknown | The service did not report usable quota information. |
 
-Hover a reset countdown to see the exact local date and time. Some models share quota buckets, so their percentages should not be added together. Service response times and polling intervals mean detection is not instantaneous.
+Hover a reset countdown to see the exact local date and time. A full-quota model does not show a countdown: the service may report a rolling seven-day timestamp while quota is full, which is not a useful renewal estimate. The focused IDE window rechecks exhausted accounts when their reported reset times pass, then backs off between retries if they still have no quota. Some models share quota buckets, so their percentages should not be added together. Service response times and polling intervals mean detection is not instantaneous.
 
-Selecting a model shows only accounts with fresh quota for that model. The matching-account summary stays collapsed until you choose **Show accounts**.
+Selecting a model shows only accounts with fresh quota for that model. Collapsed summaries show both ready accounts and accounts waiting for reset.
 
 ## Privacy
 
