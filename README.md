@@ -71,7 +71,7 @@ Selecting a model shows only accounts with fresh quota for that model. Collapsed
 
 ## Compatibility
 
-Requires the **VS Code-based Antigravity IDE**. Account integration has been tested with Antigravity IDE 2.5.5. This extension depends on internal account interfaces and schemas shipped with the IDE; an IDE update may require an extension update. It does not intercept TLS traffic.
+Requires the **VS Code-based Antigravity IDE**. Account integration has been tested with Antigravity IDE 2.5.5. Quota requests use the Cloud Code service host configured by the running IDE. This extension depends on internal account interfaces and schemas shipped with the IDE; an IDE update may require an extension update. It does not intercept TLS traffic.
 
 This is an independent project, not an official Google extension. Provider names and logos belong to their respective owners.
 

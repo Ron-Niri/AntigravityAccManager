@@ -79,6 +79,15 @@ function availability(model, now = Date.now()) {
   return model.status;
 }
 
+function cloudCodeBase(config) {
+  const url = new URL(config.cloudCodeUrl || 'https://cloudcode-pa.googleapis.com');
+  if (url.protocol !== 'https:' || !/^(?:[a-z0-9-]+-)?cloudcode-pa\.googleapis\.com$/.test(url.hostname)
+    || url.port || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('The IDE reported an unrecognized Cloud Code service URL. Integration needs updating.');
+  }
+  return url.origin;
+}
+
 function resetDue(account, now = Date.now()) {
   if (account.error && now - Date.parse(account.lastQuotaAttemptAt) < 2 * 60000) return false;
   return (account.models || []).some(model => model.status === 'exhausted' && model.resetTime
@@ -94,7 +103,8 @@ async function quotas(token, config, cache) {
 
 async function accountData(token, config, includeSettings = false, cache) {
   if (token.isGcpTos) throw new Error('Only personal Google accounts are supported.');
-  const post = (method, body) => jsonRequest(`https://cloudcode-pa.googleapis.com/v1internal:${method}`, {
+  const base = cloudCodeBase(config);
+  const post = (method, body) => jsonRequest(`${base}/v1internal:${method}`, {
     method: 'POST', headers: { Authorization: `Bearer ${token.accessToken}`, 'Content-Type': 'application/json',
       'User-Agent': `antigravity/${config.version} windows/x64` }, body: JSON.stringify(body)
   });
@@ -113,4 +123,4 @@ async function accountData(token, config, includeSettings = false, cache) {
   return { catalog, info, settings };
 }
 
-module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, accountData, normalizeModels, availability, resetDue };
+module.exports = { installedConfig, jsonRequest, refreshToken, profile, quotas, accountData, normalizeModels, availability, resetDue, cloudCodeBase };

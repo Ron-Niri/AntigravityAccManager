@@ -2,7 +2,7 @@
   "name": "antigravity-account-manager",
   "displayName": "Antigravity Account Manager",
   "description": "Local multi-account quota dashboard and experimental session switching for Antigravity IDE.",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "publisher": "Ron-Niri",
   "license": "Apache-2.0",
   "icon": "media/icon.png",

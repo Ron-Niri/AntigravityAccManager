@@ -7,6 +7,7 @@ async function run() {
   const report = { checkedAt: new Date().toISOString(), appName: vscode.env.appName };
   try {
     const config = core.installedConfig(vscode.env.appRoot);
+    if (typeof vscode.getCloudCodeUrl === 'function') config.cloudCodeUrl = await vscode.getCloudCodeUrl();
     report.ideVersion = config.version;
     const api = vscode.antigravityUnifiedStateSync;
     report.canReadSession = !!api?.OAuthPreferences?.getOAuthTokenInfo;

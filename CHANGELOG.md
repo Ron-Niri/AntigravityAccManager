@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.7
+
+- Use the running IDE's configured Cloud Code host for quota checks and account switching. The default host could report Gemini at 100% even when the IDE showed an exhausted quota.
+
 ## 0.5.6
 
 - Hide rolling seven-day reset timestamps for models whose quota is reported as full.

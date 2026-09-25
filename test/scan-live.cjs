@@ -4,6 +4,7 @@ const core = require('../src/core.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
 async function run(context, vscode) {
   const config = core.installedConfig(vscode.env.appRoot);
+  if (typeof vscode.getCloudCodeUrl === 'function') config.cloudCodeUrl = await vscode.getCloudCodeUrl();
   const accounts = JSON.parse(await context.secrets.get('agm.accounts.v1') || '[]');
   const results = [];
   for (const phase of ['cold', 'warm']) {

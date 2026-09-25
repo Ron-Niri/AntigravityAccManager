@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeModels, availability, resetDue, refreshToken, quotas } = require('../src/core.cjs');
+const { normalizeModels, availability, resetDue, refreshToken, quotas, cloudCodeBase } = require('../src/core.cjs');
 const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
 const { summarize, visibleForSelection } = require('../media/readiness.js');
@@ -211,6 +211,24 @@ test('quota requests use the account project and do not initiate onboarding', as
     await quotas({ accessToken: 'test' }, { version: 'test' });
     assert.equal(requests.length, 2); assert.deepEqual(requests[1].body, { project: 'project-a' });
     assert.ok(requests[1].url.endsWith(':fetchAvailableModels'));
+  } finally { global.fetch = original; }
+});
+test('quota requests follow the IDE Cloud Code host instead of the public default', async () => {
+  const original = global.fetch, urls = [];
+  global.fetch = async url => {
+    urls.push(url);
+    return { ok: true, json: async () => url.endsWith(':loadCodeAssist')
+      ? { cloudaicompanionProject: 'project-a' } : { models: {} } };
+  };
+  try {
+    const config = { version: 'test', cloudCodeUrl: 'https://daily-cloudcode-pa.googleapis.com' };
+    await quotas({ accessToken: 'test' }, config);
+    assert.deepEqual(urls, [
+      'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist',
+      'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels'
+    ]);
+    assert.equal(cloudCodeBase(config), 'https://daily-cloudcode-pa.googleapis.com');
+    assert.throws(() => cloudCodeBase({ cloudCodeUrl: 'https://untrusted.example.com' }), /unrecognized/);
   } finally { global.fetch = original; }
 });
 test('service error bodies containing credentials are never surfaced', async () => {

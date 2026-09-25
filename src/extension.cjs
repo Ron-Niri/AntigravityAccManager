@@ -27,6 +27,7 @@ function activate(context) {
     const saved = await context.secrets.get(ACCOUNT_KEY);
     if (saved) accounts = JSON.parse(saved);
     config = core.installedConfig(vscode.env.appRoot);
+    if (typeof vscode.getCloudCodeUrl === 'function') config.cloudCodeUrl = await vscode.getCloudCodeUrl();
   })();
   ready.catch(() => {});
   const save = () => context.secrets.store(ACCOUNT_KEY, JSON.stringify(accounts));
