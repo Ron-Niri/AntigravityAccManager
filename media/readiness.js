@@ -16,7 +16,20 @@
   function visibleForSelection(account, model, selectedModel) {
     return !selectedModel || model.id === selectedModel && modelState(account, model) === 'available';
   }
-  const api = { modelState, summarize, visibleForSelection };
+  function selectedAvailability(accounts, modelId) {
+    const groups = { ready: [], waiting: [], check: [], notOffered: [] };
+    for (const account of accounts) {
+      const model = account.models.find(item => item.id === modelId);
+      if (account.error) groups.check.push(account);
+      else if (!model) groups[account.checkedAt ? 'notOffered' : 'check'].push(account);
+      else if (modelState(account, model) === 'available') groups.ready.push(account);
+      else if (modelState(account, model) === 'exhausted'
+        || model.fraction === 0 && model.resetTime && Date.parse(model.resetTime) > Date.now()) groups.waiting.push(account);
+      else groups.check.push(account);
+    }
+    return groups;
+  }
+  const api = { modelState, summarize, visibleForSelection, selectedAvailability };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AccountReadiness = api;
 })(globalThis);

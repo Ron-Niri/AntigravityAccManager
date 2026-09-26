@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { normalizeModels, availability, resetDue, refreshToken, quotas, cloudCodeBase } = require('../src/core.cjs');
 const { signIn } = require('../src/oauth.cjs');
 const { createHash } = require('node:crypto');
-const { summarize, visibleForSelection } = require('../media/readiness.js');
+const { summarize, visibleForSelection, selectedAvailability } = require('../media/readiness.js');
 const { switchSession } = require('../src/switch.cjs');
 const { scanAccounts } = require('../src/scan.cjs');
 const { profilesFromState, profileAccounts, uniqueAccounts, openProfile, closeWindow } = require('../src/chrome.cjs');
@@ -38,6 +38,20 @@ test('selected model filtering hides exhausted and failed accounts', () => {
   assert.equal(visibleForSelection({ error: null }, { id: selected, status: 'exhausted' }, selected), false);
   assert.equal(visibleForSelection({ error: 'offline' }, { id: selected, status: 'available' }, selected), false);
   assert.equal(visibleForSelection({ error: null }, { id: 'other', status: 'available' }, selected), false);
+});
+test('selected model summary accounts for ready, exhausted, stale, failed, and missing accounts', () => {
+  const selected = 'gemini-test';
+  const account = (id, status, extra = {}) => ({ id, models: status ? [{ id: selected, status, fraction: status === 'exhausted' ? 0 : 1 }] : [], ...extra });
+  const accounts = [account('ready', 'available'), account('waiting', 'exhausted'),
+    account('stale', 'stale'), account('failed', 'available', { error: 'offline' }),
+    account('unchecked', null), account('not-offered', null, { checkedAt: new Date().toISOString() }),
+    { id: 'cached-waiting', models: [{ id: selected, status: 'stale', fraction: 0,
+      resetTime: new Date(Date.now() + 3600000).toISOString() }] }];
+  const groups = selectedAvailability(accounts, selected);
+  assert.deepEqual(Object.fromEntries(Object.entries(groups).map(([key, list]) => [key, list.map(item => item.id)])), {
+    ready: ['ready'], waiting: ['waiting', 'cached-waiting'], check: ['stale', 'failed', 'unchecked'], notOffered: ['not-offered']
+  });
+  assert.equal(Object.values(groups).reduce((count, list) => count + list.length, 0), accounts.length);
 });
 test('Chrome profile discovery uses public profile metadata only', () => {
   assert.deepEqual(profilesFromState({ profile: { info_cache: {

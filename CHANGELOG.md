@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8
+
+- Account for every connected account in the selected-model summary, including expired readings, failed checks, and accounts without that model.
+- Keep cached exhausted reset times visible while distinguishing them from fresh readings.
+
 ## 0.5.7
 
 - Use the running IDE's configured Cloud Code host for quota checks and account switching. The default host could report Gemini at 100% even when the IDE showed an exhausted quota.

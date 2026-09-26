@@ -63,32 +63,60 @@ function render() {
   el('monitor-status').textContent = state.monitor?.enabled ? `${monitoredLabel} · ${state.monitor.status}` : (selected ? 'Checks every 20s. You approve each switch.' : 'Select a model to enable monitoring.');
   el('switch-offer').hidden = !state.pendingOffer;
   el('offer-text').textContent = state.pendingOffer ? `${state.pendingOffer.model} is exhausted on ${state.pendingOffer.from}. ${state.pendingOffer.to} has quota available.` : '';
-  const matches = state.accounts.filter(a => !a.error && a.models.some(m => m.id === selected && m.status === 'available'));
-  const waiting = state.accounts.flatMap(a => a.error ? [] : a.models.filter(m => m.id === selected && m.fraction === 0)
-    .map(m => ({ email: a.email, resetTime: m.resetTime, status: m.status })));
   const result = el('model-result'); result.hidden = !selected; result.replaceChildren();
   if (selected) {
+    const groups = AccountReadiness.selectedAvailability(state.accounts, selected);
+    result.append(node('div', `${state.accounts.length} connected · ${groups.ready.length} ready · ${groups.waiting.length} waiting · ${groups.check.length} need refresh${groups.notOffered.length ? ` · ${groups.notOffered.length} not offered` : ''}`, 'model-total'));
     const readyAccounts = node('details', undefined, 'ready-accounts');
     const readySummary = node('summary');
-    readySummary.append(node('strong', `${matches.length} account${matches.length === 1 ? '' : 's'} ready`, matches.length ? 'ready-label' : ''));
-    readySummary.append(node('span', matches.length ? 'Show accounts' : 'Refresh to check again', 'ready-toggle'));
+    readySummary.append(node('strong', `${groups.ready.length} account${groups.ready.length === 1 ? '' : 's'} ready`, groups.ready.length ? 'ready-label' : ''));
+    readySummary.append(node('span', groups.ready.length ? 'Show accounts' : 'Refresh to check again', 'ready-toggle'));
     readyAccounts.append(readySummary);
-    if (matches.length) {
+    if (groups.ready.length) {
       const readyList = node('div', undefined, 'ready-list');
-      for (const account of matches) readyList.append(node('span', account.email));
+      for (const account of groups.ready) readyList.append(node('span', account.email));
       readyAccounts.append(readyList);
     } else readyAccounts.append(node('p', 'No fresh available quota.', 'ready-empty'));
     result.append(readyAccounts);
-    if (waiting.length) {
+    if (groups.waiting.length) {
       const waitingAccounts = node('details', undefined, 'ready-accounts waiting-accounts');
       const waitingSummary = node('summary');
-      waitingSummary.append(node('strong', `${waiting.length} waiting for reset`));
+      waitingSummary.append(node('strong', `${groups.waiting.length} waiting for reset`));
       waitingSummary.append(node('span', 'Show accounts', 'ready-toggle'));
       waitingAccounts.append(waitingSummary);
       const waitingList = node('div', undefined, 'ready-list');
-      for (const account of waiting) waitingList.append(node('span', `${account.email} · ${resetLabel(account.resetTime, account.status)}`));
+      for (const account of groups.waiting) {
+        const model = account.models.find(item => item.id === selected);
+        waitingList.append(node('span', `${account.email} · ${resetLabel(model.resetTime, model.status)}${model.status === 'stale' ? ' · cached' : ''}`));
+      }
       waitingAccounts.append(waitingList);
       result.append(waitingAccounts);
+    }
+    if (groups.check.length) {
+      const checkAccounts = node('details', undefined, 'ready-accounts check-accounts');
+      const checkSummary = node('summary');
+      checkSummary.append(node('strong', `${groups.check.length} need refresh`));
+      checkSummary.append(node('span', 'Show accounts', 'ready-toggle'));
+      checkAccounts.append(checkSummary);
+      const checkList = node('div', undefined, 'ready-list');
+      for (const account of groups.check) {
+        const model = account.models.find(item => item.id === selected);
+        const reason = account.error ? 'Check failed' : !model ? 'No quota data' : model.status === 'recheck' ? 'Reset due' : model.status === 'stale' ? 'Reading expired' : 'Quota unknown';
+        checkList.append(node('span', `${account.email} · ${reason}`));
+      }
+      checkAccounts.append(checkList);
+      result.append(checkAccounts);
+    }
+    if (groups.notOffered.length) {
+      const unavailable = node('details', undefined, 'ready-accounts');
+      const unavailableSummary = node('summary');
+      unavailableSummary.append(node('strong', `${groups.notOffered.length} not offered`));
+      unavailableSummary.append(node('span', 'Show accounts', 'ready-toggle'));
+      unavailable.append(unavailableSummary);
+      const unavailableList = node('div', undefined, 'ready-list');
+      for (const account of groups.notOffered) unavailableList.append(node('span', account.email));
+      unavailable.append(unavailableList);
+      result.append(unavailable);
     }
   }
   el('notice').textContent = state.notice || ''; el('notice').hidden = !state.notice;
